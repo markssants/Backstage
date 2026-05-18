@@ -10,6 +10,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { UserProfile, UserRole } from './types';
 import { Dashboard } from './components/dashboard/Dashboard';
+
+const isFirebaseConfigured = !!(import.meta.env.VITE_FIREBASE_API_KEY && import.meta.env.VITE_FIREBASE_PROJECT_ID);
 import { RoleSelection } from './components/auth/RoleSelection';
 import { Button } from '@/components/ui/button';
 import { LogIn, Loader2, Music, Palette, Calendar, Lock, ArrowLeft } from 'lucide-react';
@@ -26,6 +28,10 @@ export default function App() {
   const [loginLoading, setLoginLoading] = useState(false);
 
   useEffect(() => {
+    if (!isFirebaseConfigured) {
+      setLoading(false);
+      return;
+    }
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setUser(user);
       if (user) {
@@ -91,7 +97,20 @@ export default function App() {
       
       <div className="relative z-10 min-h-screen flex flex-col">
         <Toaster />
-        {!user ? (
+        {!isFirebaseConfigured ? (
+          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-6">
+            <div className="w-20 h-20 bg-red-500/10 rounded-3xl flex items-center justify-center border border-red-500/20">
+              <Lock className="text-red-500 w-10 h-10" />
+            </div>
+            <div className="space-y-2 max-w-md">
+              <h2 className="text-3xl font-black text-white tracking-tight">Configuração Necessária</h2>
+              <p className="text-slate-400">
+                As variáveis de ambiente do Firebase não foram encontradas. 
+                Por favor, adicione as chaves <code className="text-pink-400">VITE_FIREBASE_*</code> no menu Configurações (Secrets) da plataforma.
+              </p>
+            </div>
+          </div>
+        ) : !user ? (
           <Landing handleLogin={handleLogin} loginLoading={loginLoading} />
         ) : !profile ? (
           <RoleSelection onSelect={selectRole} onLogout={handleLogout} />
