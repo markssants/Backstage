@@ -10,19 +10,23 @@ const firebaseConfig = {
   storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: "581432306990",
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
-  firestoreDatabaseId: import.meta.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID
 };
 
-// Validar se as configurações essenciais existem
-const isConfigValid = !!(firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.appId);
+// Only initialize if we have the minimum required config
+const hasRequiredConfig = !!firebaseConfig.apiKey && !!firebaseConfig.projectId;
 
-if (!isConfigValid && typeof window !== 'undefined') {
-  console.error("Firebase configuration is missing! Please set the VITE_FIREBASE_* environment variables in the Settings menu (Secrets).");
+if (!hasRequiredConfig) {
+  console.warn("Firebase configuration is missing. Please check your environment variables.");
 }
 
-const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId || '(default)');
-export const auth = getAuth(app);
+const app = hasRequiredConfig ? initializeApp(firebaseConfig) : ({} as any);
+const dbId = import.meta.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID;
+
+export const db = hasRequiredConfig 
+  ? (dbId ? getFirestore(app, dbId) : getFirestore(app)) 
+  : ({} as any);
+
+export const auth = hasRequiredConfig ? getAuth(app) : ({} as any);
 
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
   const errInfo: FirestoreErrorInfo = {
@@ -41,12 +45,11 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
 }
 
 async function testConnection() {
+  if (!hasRequiredConfig) return;
   try {
     await getDocFromServer(doc(db, 'test', 'connection'));
   } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.error("Please check your Firebase configuration.");
-    }
+    // Ignore errors here as they might just be permission errors
   }
 }
 

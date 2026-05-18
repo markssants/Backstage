@@ -90,6 +90,15 @@ export function Overview({ event, profile }: OverviewProps) {
     .filter(p => p.status === 'pending')
     .sort((a, b) => (a.dueDate?.seconds || 0) - (b.dueDate?.seconds || 0))[0];
 
+  const formatSafeDate = (timestamp: any, formatStr: string) => {
+    if (!timestamp || typeof timestamp.toDate !== 'function') return 'Sem Data';
+    try {
+      return format(timestamp.toDate(), formatStr, { locale: ptBR });
+    } catch (e) {
+      return 'Data Inválida';
+    }
+  };
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-6 auto-rows-[minmax(180px,auto)] gap-6 p-6">
       {/* 1. Hero Card - Large (4x2) */}
@@ -210,7 +219,7 @@ export function Overview({ event, profile }: OverviewProps) {
           </div>
         </div>
         <p className="text-[11px] text-slate-400 italic font-bold">
-          {nextPayment ? `Vence em ${format(nextPayment.dueDate.toDate(), "dd/MM/yy")}` : "Tudo em dia"}
+          {nextPayment ? `Vence em ${formatSafeDate(nextPayment.dueDate, "dd/MM/yy")}` : "Tudo em dia"}
         </p>
       </div>
 
@@ -265,11 +274,11 @@ export function Overview({ event, profile }: OverviewProps) {
               <div key={p.id} className="flex justify-between items-center p-5 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 transition-all group">
                 <div className="flex items-center space-x-4">
                   <div className="w-10 h-10 rounded-xl bg-pink-500/20 flex items-center justify-center text-pink-400 text-xs font-black">
-                    {format(p.dueDate.toDate(), "dd")}
+                    {formatSafeDate(p.dueDate, "dd")}
                   </div>
                   <div>
-                    <span className="text-sm font-bold text-slate-200 block leading-none mb-1">Parcela de {format(p.dueDate.toDate(), "MMMM", { locale: ptBR })}</span>
-                    <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Vence em {format(p.dueDate.toDate(), "dd/MM")}</p>
+                    <span className="text-sm font-bold text-slate-200 block leading-none mb-1">Parcela de {formatSafeDate(p.dueDate, "MMMM")}</span>
+                    <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Vence em {formatSafeDate(p.dueDate, "dd/MM")}</p>
                   </div>
                 </div>
                 <p className="text-lg font-black text-white">R$ {p.amount.toLocaleString()}</p>
