@@ -714,13 +714,13 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
   };
 
   const filteredArts = useMemo(() => {
-    return arts.filter(a => {
+    return visibleArts.filter(a => {
       const matchesPriority = priorityFilter === 'all' || a.priority === priorityFilter;
       const matchesCategory = categoryFilter === 'all' || a.category === categoryFilter;
       const matchesStatus = statusFilter === 'all' || a.status === statusFilter;
       return matchesPriority && matchesCategory && matchesStatus;
     });
-  }, [arts, priorityFilter, categoryFilter, statusFilter]);
+  }, [visibleArts, priorityFilter, categoryFilter, statusFilter]);
 
   const calendarDays = useMemo(() => {
     const start = startOfWeek(startOfMonth(currentMonth), { weekStartsOn: 0 });
