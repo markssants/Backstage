@@ -1,16 +1,18 @@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { UserProfile, EventProject } from "../../types";
+import { UserProfile, EventProject, ViewType } from "../../types";
 import { EventSelector } from "../events/EventSelector";
 import { Layout, Users } from "lucide-react";
+import { PendingChangesManager } from "./PendingChangesManager";
 
 interface HeaderProps {
   profile: UserProfile;
   events: EventProject[];
   selectedEventId: string | null;
   setSelectedEventId: (id: string) => void;
+  activeView: ViewType;
 }
 
-export function Header({ profile, events, selectedEventId, setSelectedEventId }: HeaderProps) {
+export function Header({ profile, events, selectedEventId, setSelectedEventId, activeView }: HeaderProps) {
   const activeEvent = events.find(e => e.id === selectedEventId);
 
   return (
@@ -18,24 +20,30 @@ export function Header({ profile, events, selectedEventId, setSelectedEventId }:
       <div className="flex items-center space-x-6">
         <div className="flex items-center space-x-4">
           {events.length > 0 && selectedEventId ? (
-            <div className="flex items-center space-x-4 bg-white/5 p-1 rounded-2xl border border-white/10 shadow-lg">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-pink-500 to-purple-500 flex items-center justify-center shadow-[0_0_15px_rgba(236,72,153,0.3)]">
-                <Layout className="text-white w-5 h-5" />
+            <div className="flex items-center space-x-3">
+              <div className="flex items-center space-x-4 bg-white/5 p-1 rounded-2xl border border-white/10 shadow-lg">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-pink-500 to-purple-500 flex items-center justify-center shadow-[0_0_15px_rgba(236,72,153,0.3)]">
+                  <Layout className="text-white w-5 h-5" />
+                </div>
+                <Select value={selectedEventId} onValueChange={setSelectedEventId}>
+                  <SelectTrigger className="w-[180px] md:w-[260px] border-none bg-transparent font-black text-white rounded-xl focus:ring-0 transition-all h-10 text-sm tracking-tight">
+                    <SelectValue placeholder="Selecione um evento">
+                      {activeEvent?.name}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent className="rounded-[1.5rem] bg-slate-900/95 border-white/10 backdrop-blur-xl text-slate-100 shadow-2xl">
+                    {events.map((event) => (
+                      <SelectItem key={event.id} value={event.id} className="cursor-pointer focus:bg-pink-500 font-bold py-3 rounded-xl mx-1 my-1">
+                        {event.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-              <Select value={selectedEventId} onValueChange={setSelectedEventId}>
-                <SelectTrigger className="w-[180px] md:w-[260px] border-none bg-transparent font-black text-white rounded-xl focus:ring-0 transition-all h-10 text-sm tracking-tight">
-                  <SelectValue placeholder="Selecione um evento">
-                    {activeEvent?.name}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent className="rounded-[1.5rem] bg-slate-900/95 border-white/10 backdrop-blur-xl text-slate-100 shadow-2xl">
-                  {events.map((event) => (
-                    <SelectItem key={event.id} value={event.id} className="cursor-pointer focus:bg-pink-500 font-bold py-3 rounded-xl mx-1 my-1">
-                      {event.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+
+              {activeEvent && (
+                <PendingChangesManager profile={profile} selectedEventId={selectedEventId} />
+              )}
             </div>
           ) : (
             <div className="flex items-center space-x-4">
@@ -49,7 +57,7 @@ export function Header({ profile, events, selectedEventId, setSelectedEventId }:
       </div>
 
       <div className="flex items-center space-x-3">
-        {activeEvent && (
+        {activeEvent && activeView === 'overview' && (
           <EventSelector 
             profile={profile} 
             editEvent={activeEvent} 
@@ -57,7 +65,9 @@ export function Header({ profile, events, selectedEventId, setSelectedEventId }:
             isMinimal 
           />
         )}
-        <EventSelector profile={profile} onEventCreated={(id) => setSelectedEventId(id)} isMinimal />
+        {activeView === 'overview' && (
+          <EventSelector profile={profile} onEventCreated={(id) => setSelectedEventId(id)} isMinimal />
+        )}
       </div>
     </header>
   );

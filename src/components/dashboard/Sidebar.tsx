@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { LayoutDashboard, Palette, Music, CreditCard, LogOut, Brush, Users, Gavel, FolderOpen } from "lucide-react";
+import { LayoutDashboard, Palette, Music, CreditCard, LogOut, Brush, Users, Gavel, FolderOpen, Shield } from "lucide-react";
 import { ViewType, UserProfile } from "../../types";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,10 @@ export function Sidebar({ activeView, setActiveView, profile, onLogout }: Sideba
     { id: 'payments' as ViewType, label: 'Pagamentos', icon: CreditCard },
     { id: 'docs' as ViewType, label: 'Corregedoria', icon: Gavel },
   ];
+
+  if (profile.email === "beysarts@gmail.com") {
+    menuItems.push({ id: 'admin' as ViewType, label: 'Painel Admin', icon: Shield });
+  }
 
   return (
     <motion.aside 
@@ -167,7 +171,7 @@ export function Sidebar({ activeView, setActiveView, profile, onLogout }: Sideba
                   className="flex items-center justify-between flex-1 min-w-0"
                 >
                   <span className="truncate">Sair</span>
-                  <span className="text-[9px] text-slate-400 font-black opacity-70 uppercase tracking-widest ml-2 shrink-0">v2.0</span>
+                  <span className="text-[9px] text-slate-400 font-black opacity-70 uppercase tracking-widest ml-2 shrink-0">v2.1</span>
                 </motion.div>
               )}
             </AnimatePresence>

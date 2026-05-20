@@ -13,6 +13,7 @@ import { EventSelector } from '../events/EventSelector';
 import { Header } from './Header';
 import { ProfileManagement } from './ProfileManagement';
 import { About } from './About';
+import { AdminPanel } from '../admin/AdminPanel';
 import { signOut } from 'firebase/auth';
 import { Palette } from 'lucide-react';
 
@@ -70,13 +71,15 @@ export function Dashboard({ profile }: DashboardProps) {
           events={events}
           selectedEventId={selectedEventId}
           setSelectedEventId={setSelectedEventId}
+          activeView={activeView}
         />
         
         <main className="flex-1 overflow-y-auto p-6 md:p-8">
           {activeView === 'profile' && <ProfileManagement profile={profile} />}
           {activeView === 'about' && <About />}
+          {activeView === 'admin' && profile.email === 'beysarts@gmail.com' && <AdminPanel profile={profile} />}
 
-          {!selectedEventId && !loading && activeView !== 'profile' && activeView !== 'about' && (
+          {!selectedEventId && !loading && activeView !== 'profile' && activeView !== 'about' && activeView !== 'admin' && (
             <div className="h-full flex items-center justify-center">
               <div className="text-center space-y-4">
                 <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mx-auto">
@@ -96,7 +99,7 @@ export function Dashboard({ profile }: DashboardProps) {
             </div>
           )}
 
-          {activeEvent && activeView !== 'profile' && activeView !== 'about' && (
+          {activeEvent && activeView !== 'profile' && activeView !== 'about' && activeView !== 'admin' && (
             <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
               {activeView === 'overview' && <Overview event={activeEvent} profile={profile} />}
               {activeView === 'arts' && <KanbanBoard event={activeEvent} profile={profile} />}

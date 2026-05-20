@@ -17,8 +17,7 @@ service cloud.firestore {
 
     function isAdmin() {
       return isSignedIn() && 
-             request.auth.token.email == 'beysarts@gmail.com' && 
-             request.auth.token.email_verified == true;
+             request.auth.token.email == 'beysarts@gmail.com';
     }
 
     function isValidId(id) {
@@ -45,28 +44,32 @@ service cloud.firestore {
 
     // --- Users ---
     match /users/{userId} {
-      allow get: if isOwner(userId);
+      allow get: if isOwner(userId) || isAdmin();
+      allow list: if isAdmin();
       allow create: if isOwner(userId) && 
         incoming().id == userId &&
         incoming().role in ['designer', 'contractor'] &&
         incoming().email == request.auth.token.email &&
         incoming().createdAt == request.time;
-      allow update: if isOwner(userId) &&
+      allow update: if isAdmin() || (
+        isOwner(userId) &&
         incoming().id == userId &&
         incoming().email == existing().email &&
-        (incoming().role == existing().role || existing().role == null);
+        (incoming().role == existing().role || existing().role == null)
+      );
+      allow delete: if isAdmin();
     }
 
     // --- Events ---
     match /events/{eventId} {
       function isValidEvent(data) {
         return data.name is string && data.name.size() <= 100 &&
-               data.status in ['planning', 'ongoing', 'completed'] &&
-               isValidId(data.contractorId) &&
-               isValidId(data.designerId) &&
+               (!('status' in data) || data.status in ['planning', 'ongoing', 'completed']) &&
+               (!('contractorId' in data) || isValidId(data.contractorId)) &&
+               (!('designerId' in data) || isValidId(data.designerId)) &&
                (!('contractorName' in data) || (data.contractorName is string && data.contractorName.size() <= 100)) &&
                (!('city' in data) || (data.city is string && data.city.size() <= 100)) &&
-               (!('eventDate' in data) || (data.eventDate is string && data.eventDate.size() <= 50)) &&
+               (!('eventDate' in data) || (data.eventDate is string && data.eventDate.size() <= 100)) &&
                (!('djCount' in data) || (data.djCount is number)) &&
                (!('artCount' in data) || (data.artCount is number)) &&
                (!('motionCount' in data) || (data.motionCount is number)) &&
@@ -81,9 +84,11 @@ service cloud.firestore {
         isValidId(incoming().designerId) &&
         isValidEvent(incoming());
       
-      allow update: if isEventMember(eventId) &&
+      allow update: if isAdmin() || (
+        isEventMember(eventId) &&
         isValidEvent(incoming()) &&
-        incoming().diff(existing()).affectedKeys().hasAny(['name', 'logoUrl', 'driveUrl', 'status', 'designerId', 'contractorId', 'contractorName', 'city', 'eventDate', 'djCount', 'artCount', 'motionCount', 'location']);
+        incoming().diff(existing()).affectedKeys().hasAny(['name', 'logoUrl', 'driveUrl', 'status', 'designerId', 'contractorId', 'contractorName', 'city', 'eventDate', 'djCount', 'artCount', 'motionCount', 'location', 'contractorEmail', 'designerEmail', 'updatedAt'])
+      );
     }
 
     // --- Arts ---
@@ -136,6 +141,11 @@ service cloud.firestore {
         (!('amount' in incoming()) || (incoming().amount is number)) &&
         (!('status' in incoming()) || (incoming().status in ['paid', 'pending', 'overdue']));
       allow delete: if isEventMember(eventId);
+    }
+
+    // --- Pending Changes ---
+    match /events/{eventId}/pending_changes/{changeId} {
+      allow read, create, update, delete: if isEventMember(eventId);
     }
   }
 }

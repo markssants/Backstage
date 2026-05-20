@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Plus, GripVertical, MessageSquare, Clock, Calendar, Palette, MoreHorizontal, User, ChevronLeft, ChevronRight, Music, PartyPopper, Star, AlertTriangle, List, Layout, GanttChart } from "lucide-react";
-import { EventProject, UserProfile, ArtTask, OperationType } from "../../types";
+import { EventProject, UserProfile, ArtTask, OperationType, PendingChange } from "../../types";
 import { collection, query, onSnapshot, addDoc, updateDoc, doc, serverTimestamp, deleteDoc, orderBy } from "firebase/firestore";
 import { db, handleFirestoreError } from "../../firebase";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
@@ -113,27 +113,61 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
       : 0;
 
     try {
-      await addDoc(collection(db, 'events', event.id, 'arts'), {
-        ...newArt,
-        eventId: event.id,
-        status: status,
-        position: maxPosition + 1000, // Large gap for easier reordering if needed
-        createdAt: serverTimestamp(),
-      });
-      setIsAddOpen(false);
-      setNewArt({ 
-        title: '', 
-        description: '', 
-        priority: 'medium', 
-        category: 'dj', 
-        deadline: '', 
-        color: '#000000',
-        status: 'todo'
-      });
-      toast.success(`Arte adicionada em ${translateStatus(status)}!`);
+      if (profile.role === 'contractor') {
+        const pendingChangeData = {
+          type: 'create',
+          proposedData: {
+            title: newArt.title.trim(),
+            description: newArt.description.trim(),
+            priority: newArt.priority,
+            category: newArt.category,
+            deadline: newArt.deadline || null,
+            status: status,
+            position: maxPosition + 1000
+          },
+          originalData: null,
+          targetId: '',
+          title: `Criação de nova Arte "${newArt.title}"`,
+          contractorName: profile.name || 'Cliente',
+          contractorEmail: profile.email,
+          status: 'pending',
+          createdAt: serverTimestamp()
+        };
+        await addDoc(collection(db, 'events', event.id, 'pending_changes'), pendingChangeData);
+        setIsAddOpen(false);
+        setNewArt({ 
+          title: '', 
+          description: '', 
+          priority: 'medium', 
+          category: 'dj', 
+          deadline: '', 
+          color: '#000000',
+          status: 'todo'
+        });
+        toast.info("Sugestão de nova arte enviada para aprovação do designer!");
+      } else {
+        await addDoc(collection(db, 'events', event.id, 'arts'), {
+          ...newArt,
+          eventId: event.id,
+          status: status,
+          position: maxPosition + 1000, // Large gap for easier reordering if needed
+          createdAt: serverTimestamp(),
+        });
+        setIsAddOpen(false);
+        setNewArt({ 
+          title: '', 
+          description: '', 
+          priority: 'medium', 
+          category: 'dj', 
+          deadline: '', 
+          color: '#000000',
+          status: 'todo'
+        });
+        toast.success(`Arte adicionada em ${translateStatus(status)}!`);
+      }
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, path);
-      toast.error("Erro ao adicionar arte");
+      toast.error("Erro ao solicitar criação de arte");
     } finally {
       setLoading(false);
     }
@@ -144,16 +178,47 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
     setLoading(true);
     const path = `events/${event.id}/arts/${selectedArt.id}`;
     try {
-      await updateDoc(doc(db, 'events', event.id, 'arts', selectedArt.id), {
-        title: editArt.title || selectedArt.title,
-        description: editArt.description || '',
-        priority: editArt.priority || 'medium',
-        category: editArt.category || 'dj',
-        deadline: editArt.deadline || null,
-        status: editArt.status || 'todo'
-      });
-      toast.success("Alterações salvas!");
-      setSelectedArt(null);
+      if (profile.role === 'contractor') {
+        const pendingChangeData = {
+          type: 'update',
+          proposedData: {
+            title: editArt.title || selectedArt.title,
+            description: editArt.description || '',
+            priority: editArt.priority || 'medium',
+            category: editArt.category || 'dj',
+            deadline: editArt.deadline || null,
+            status: editArt.status || 'todo'
+          },
+          originalData: {
+            title: selectedArt.title,
+            description: selectedArt.description || '',
+            priority: selectedArt.priority || 'medium',
+            category: selectedArt.category || 'dj',
+            deadline: selectedArt.deadline || null,
+            status: selectedArt.status || 'todo'
+          },
+          targetId: selectedArt.id,
+          title: `Alteração na Arte "${selectedArt.title}"`,
+          contractorName: profile.name || 'Cliente',
+          contractorEmail: profile.email,
+          status: 'pending',
+          createdAt: serverTimestamp()
+        };
+        await addDoc(collection(db, 'events', event.id, 'pending_changes'), pendingChangeData);
+        toast.info("Alteração no briefing enviada para aprovação do designer!");
+        setSelectedArt(null);
+      } else {
+        await updateDoc(doc(db, 'events', event.id, 'arts', selectedArt.id), {
+          title: editArt.title || selectedArt.title,
+          description: editArt.description || '',
+          priority: editArt.priority || 'medium',
+          category: editArt.category || 'dj',
+          deadline: editArt.deadline || null,
+          status: editArt.status || 'todo'
+        });
+        toast.success("Alterações salvas!");
+        setSelectedArt(null);
+      }
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, path);
       toast.error("Erro ao salvar alterações");
@@ -165,8 +230,31 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
   const updateArtStatus = async (artId: string, newStatus: string) => {
     const path = `events/${event.id}/arts/${artId}`;
     try {
-      await updateDoc(doc(db, 'events', event.id, 'arts', artId), { status: newStatus });
-      toast.success("Status atualizado!");
+      if (profile.role === 'contractor') {
+        const artToMove = arts.find(a => a.id === artId);
+        if (artToMove) {
+          const pendingChangeData = {
+            type: 'status',
+            proposedData: {
+              status: newStatus
+            },
+            originalData: {
+              status: artToMove.status
+            },
+            targetId: artId,
+            title: `Mudar status de "${artToMove.title}" para ${translateStatus(newStatus)}`,
+            contractorName: profile.name || 'Cliente',
+            contractorEmail: profile.email,
+            status: 'pending',
+            createdAt: serverTimestamp()
+          };
+          await addDoc(collection(db, 'events', event.id, 'pending_changes'), pendingChangeData);
+          toast.info("Sugestão de alteração de status enviada para o designer!");
+        }
+      } else {
+        await updateDoc(doc(db, 'events', event.id, 'arts', artId), { status: newStatus });
+        toast.success("Status atualizado!");
+      }
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, path);
       toast.error("Erro ao atualizar status");
@@ -174,12 +262,31 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
   };
 
   const handleDeleteArt = async (artId: string) => {
-    if (!confirm("Tem certeza que deseja excluir esta arte?")) return;
+    if (!confirm("Tem certeza que deseja solicitar a exclusão desta arte?")) return;
     const path = `events/${event.id}/arts/${artId}`;
     try {
-      await deleteDoc(doc(db, 'events', event.id, 'arts', artId));
-      setSelectedArt(null);
-      toast.success("Arte excluída!");
+      if (profile.role === 'contractor') {
+        const artToDelete = arts.find(a => a.id === artId);
+        if (artToDelete) {
+          const pendingChangeData = {
+            type: 'delete',
+            proposedData: null,
+            originalData: artToDelete ? { title: artToDelete.title } : null,
+            targetId: artId,
+            title: `Solicitação de Exclusão da Arte "${artToDelete.title}"`,
+            contractorName: profile.name || 'Cliente',
+            contractorEmail: profile.email,
+            status: 'pending',
+            createdAt: serverTimestamp()
+          };
+          await addDoc(collection(db, 'events', event.id, 'pending_changes'), pendingChangeData);
+          toast.info("Solicitação de exclusão enviada para aprovação do designer!");
+        }
+      } else {
+        await deleteDoc(doc(db, 'events', event.id, 'arts', artId));
+        setSelectedArt(null);
+        toast.success("Arte excluída!");
+      }
     } catch (err) {
       handleFirestoreError(err, OperationType.DELETE, path);
       toast.error("Erro ao excluir arte");
@@ -411,11 +518,36 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
 
     const path = `events/${event.id}/arts/${draggableId}`;
     try {
-      await updateDoc(doc(db, 'events', event.id, 'arts', draggableId), {
-        status: destStatus,
-        position: newPosition
-      });
-      // No toast here to keep it smooth
+      if (profile.role === 'contractor') {
+        const artToMove = arts.find(a => a.id === draggableId);
+        if (artToMove && artToMove.status !== destStatus) {
+          const pendingChangeData = {
+            type: 'status',
+            proposedData: {
+              status: destStatus,
+              position: newPosition
+            },
+            originalData: {
+              status: artToMove.status,
+              position: artToMove.position ?? 0
+            },
+            targetId: draggableId,
+            title: `Mover "${artToMove.title}" para ${translateStatus(destStatus)}`,
+            contractorName: profile.name || 'Cliente',
+            contractorEmail: profile.email,
+            status: 'pending',
+            createdAt: serverTimestamp()
+          };
+          await addDoc(collection(db, 'events', event.id, 'pending_changes'), pendingChangeData);
+          toast.info("Sugestão de movimentação enviada para aprovação do designer!");
+        }
+      } else {
+        await updateDoc(doc(db, 'events', event.id, 'arts', draggableId), {
+          status: destStatus,
+          position: newPosition
+        });
+        // No toast here to keep it smooth
+      }
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, path);
       toast.error("Erro ao reordenar arte");

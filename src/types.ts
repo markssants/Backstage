@@ -26,6 +26,7 @@ export interface EventProject {
   designerEmail?: string;
   status: 'planning' | 'ongoing' | 'completed';
   createdAt: any;
+  updatedAt?: any;
 }
 
 export interface ArtTask {
@@ -85,7 +86,7 @@ export interface PaymentItem {
   updatedAt?: any;
 }
 
-export type ViewType = 'overview' | 'arts' | 'dj' | 'docs' | 'payments' | 'files' | 'profile' | 'about';
+export type ViewType = 'overview' | 'arts' | 'dj' | 'docs' | 'payments' | 'files' | 'profile' | 'about' | 'admin';
 
 export enum OperationType {
   CREATE = 'create',
@@ -105,4 +106,17 @@ export interface FirestoreErrorInfo {
     email?: string | null;
     emailVerified?: boolean | null;
   }
+}
+
+export interface PendingChange {
+  id: string;
+  type: 'create' | 'update' | 'status' | 'delete';
+  proposedData: any;
+  originalData: any;
+  targetId: string;
+  title: string;
+  contractorName: string;
+  contractorEmail: string;
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: any;
 }
