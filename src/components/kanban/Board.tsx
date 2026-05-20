@@ -3,9 +3,9 @@ import { createPortal } from 'react-dom';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Plus, GripVertical, MessageSquare, Clock, Calendar, Palette, MoreHorizontal, User, ChevronLeft, ChevronRight, Music, PartyPopper, Star, AlertTriangle, List, Layout, GanttChart } from "lucide-react";
+import { Plus, GripVertical, MessageSquare, Clock, Calendar, Palette, MoreHorizontal, User, ChevronLeft, ChevronRight, Music, PartyPopper, Star, AlertTriangle, List, Layout, GanttChart, Pencil, Trash2, Move, ArrowRight, RotateCcw, History, Check, X } from "lucide-react";
 import { EventProject, UserProfile, ArtTask, OperationType, PendingChange } from "../../types";
-import { collection, query, onSnapshot, addDoc, updateDoc, doc, serverTimestamp, deleteDoc, orderBy } from "firebase/firestore";
+import { collection, query, onSnapshot, addDoc, updateDoc, doc, serverTimestamp, deleteDoc, orderBy, setDoc } from "firebase/firestore";
 import { db, handleFirestoreError } from "../../firebase";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -69,6 +69,10 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
     status: 'todo' as ColumnId
   });
 
+  const isMasterDesigner = profile.email === 'beysarts@gmail.com';
+  const [activeTab, setActiveTab] = useState<'details' | 'history'>('details');
+  const [isValidationDialogOpen, setIsValidationDialogOpen] = useState(false);
+
   const [selectedArt, setSelectedArt] = useState<ArtTask | null>(null);
   const [editArt, setEditArt] = useState<Partial<ArtTask> | null>(null);
 
@@ -89,6 +93,7 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
   useEffect(() => {
     if (selectedArt) {
       setEditArt({ ...selectedArt });
+      setActiveTab('details');
     } else {
       setEditArt(null);
     }
@@ -111,6 +116,80 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
     });
     return () => unsubscribe();
   }, [event.id]);
+
+  const renderPendingBadge = (art: ArtTask, isMinimal = false) => {
+    const activeChanges = pendingChanges.filter(c => c.targetId === art.id && c.status === 'pending');
+    if (activeChanges.length === 0 && !art.isPendingCreate && !art.isPendingDelete) return null;
+
+    // Grab the latest one (newest first)
+    const activeChange = activeChanges.sort((a, b) => {
+      const tA = a.createdAt?.seconds || a.createdAt?.toMillis?.() || 0;
+      const tB = b.createdAt?.seconds || b.createdAt?.toMillis?.() || 0;
+      return tB - tA; // Newest first
+    })[0];
+
+    // Resolve type
+    const type = activeChange
+      ? activeChange.type
+      : art.isPendingDelete
+      ? 'delete'
+      : 'create';
+
+    // Icons, labels and styles based on type
+    let config = {
+      colorClass: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20 shadow-[0_0_8px_rgba(16,185,129,0.25)]",
+      icon: <Plus className="w-2.5 h-2.5 animate-pulse" />,
+      label: "Novo"
+    };
+
+    if (type === 'update') {
+      config = {
+        colorClass: "text-amber-400 bg-amber-500/10 border-amber-500/20 shadow-[0_0_8px_rgba(245,158,11,0.25)]",
+        icon: <Pencil className="w-2.5 h-2.5" />,
+        label: "Editado"
+      };
+    } else if (type === 'status') {
+      config = {
+        colorClass: "text-purple-400 bg-purple-500/10 border-purple-500/20 shadow-[0_0_8px_rgba(168,85,247,0.25)]",
+        icon: <Move className="w-2.5 h-2.5" />,
+        label: "Movido"
+      };
+    } else if (type === 'delete') {
+      config = {
+        colorClass: "text-rose-400 bg-rose-500/10 border-rose-500/20 shadow-[0_0_8px_rgba(244,63,94,0.25)]",
+        icon: <Trash2 className="w-2.5 h-2.5" />,
+        label: "Excluindo"
+      };
+    }
+
+    if (isMinimal) {
+      return (
+        <div className="flex items-center gap-1 border border-white/5 bg-black/40 rounded-full p-0.5 px-1 tracking-tight backdrop-blur-sm shrink-0">
+          <Clock className="w-2.5 h-2.5 text-slate-400 animate-pulse" />
+          <span className={cn("p-0.5 rounded-full border flex items-center justify-center", config.colorClass)}>
+            {config.icon}
+          </span>
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex items-center gap-1.5 border border-white/5 bg-black/40 rounded-full p-1 pl-1.5 pr-2.5 tracking-tight backdrop-blur-sm shrink-0">
+        <Clock className="w-3 h-3 text-slate-400 animate-pulse" />
+        <span className={cn("p-1 rounded-full border flex items-center justify-center", config.colorClass)}>
+          {config.icon}
+        </span>
+        <span className={cn("text-[9px] font-black uppercase tracking-wider", 
+          type === 'create' ? 'text-emerald-400' :
+          type === 'update' ? 'text-amber-400' :
+          type === 'status' ? 'text-purple-400' :
+          'text-rose-400'
+        )}>
+          {config.label}
+        </span>
+      </div>
+    );
+  };
 
   const handleAddArt = async () => {
     if (!newArt.title.trim()) return;
@@ -260,6 +339,197 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, path);
       toast.error("Erro ao salvar alterações");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDirectRevert = async (change: PendingChange) => {
+    if (!selectedArt || !change.originalData) return;
+    setLoading(true);
+    const path = `events/${event.id}/arts/${selectedArt.id}`;
+    try {
+      await updateDoc(doc(db, 'events', event.id, 'arts', selectedArt.id), {
+        ...change.originalData,
+        updatedAt: serverTimestamp()
+      });
+
+      await addDoc(collection(db, 'events', event.id, 'pending_changes'), {
+        type: 'revert',
+        targetId: selectedArt.id,
+        title: `Reversão direta de Atividade por ${profile.name}`,
+        contractorName: profile.name || 'Cliente',
+        contractorEmail: profile.email,
+        status: 'reverted',
+        proposedData: {
+          restoreData: change.originalData,
+          changeType: change.type,
+          historicalChangeId: change.id
+        },
+        originalData: {
+          title: selectedArt.title,
+          description: selectedArt.description || '',
+          priority: selectedArt.priority || 'medium',
+          category: selectedArt.category || 'dj',
+          deadline: selectedArt.deadline || null,
+          status: selectedArt.status || 'todo'
+        },
+        createdAt: serverTimestamp()
+      });
+
+      toast.success("Atividade revertida com sucesso para a versão antiga!");
+      setSelectedArt(null);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, path);
+      toast.error("Erro ao reverter atividade.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRequestRevert = async (change: PendingChange) => {
+    if (!selectedArt || !change.originalData) return;
+    setLoading(true);
+    try {
+      await addDoc(collection(db, 'events', event.id, 'pending_changes'), {
+        type: 'revert',
+        targetId: selectedArt.id,
+        title: `Solicitação de Reversão de Atividade`,
+        contractorName: profile.name || 'Cliente',
+        contractorEmail: profile.email,
+        status: 'pending',
+        proposedData: {
+          restoreData: change.originalData,
+          changeType: change.type,
+          historicalChangeId: change.id
+        },
+        originalData: {
+          title: selectedArt.title,
+          description: selectedArt.description || '',
+          priority: selectedArt.priority || 'medium',
+          category: selectedArt.category || 'dj',
+          deadline: selectedArt.deadline || null,
+          status: selectedArt.status || 'todo'
+        },
+        createdAt: serverTimestamp()
+      });
+
+      toast.success("Solicitação de reversão enviada para aprovação do designer mestre!");
+      setSelectedArt(null);
+    } catch (err) {
+      console.error(err);
+      toast.error("Erro ao solicitar reversão para aprovação.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleApprovePendingChange = async (change: PendingChange) => {
+    setLoading(true);
+    try {
+      const artDocRef = doc(db, 'events', event.id, 'arts', change.targetId);
+
+      if (change.type === 'create') {
+        await setDoc(artDocRef, {
+          ...change.proposedData,
+          eventId: event.id,
+          isPendingCreate: false,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+        toast.success(`Nova arte "${change.proposedData?.title || ''}" criada com sucesso!`);
+      } 
+      else if (change.type === 'update') {
+        await updateDoc(artDocRef, {
+          ...change.proposedData,
+          updatedAt: serverTimestamp()
+        });
+        toast.success(`Mudanças na arte "${change.proposedData?.title || ''}" aprovadas e aplicadas!`);
+      } 
+      else if (change.type === 'status') {
+        await updateDoc(artDocRef, {
+          status: change.proposedData.status,
+          position: change.proposedData.position !== undefined ? change.proposedData.position : 1000,
+          updatedAt: serverTimestamp()
+        });
+        toast.success(`Movimentação para "${translateStatus(change.proposedData.status)}" aprovada!`);
+      } 
+      else if (change.type === 'delete') {
+        await deleteDoc(artDocRef);
+        toast.success(`Exclusão da arte aprovada com sucesso!`);
+      }
+      else if (change.type === 'revert') {
+        const { restoreData, changeType, historicalChangeId } = change.proposedData;
+        
+        if (changeType === 'create') {
+          await deleteDoc(artDocRef);
+          toast.success(`Criação revertida: A arte foi removida.`);
+        }
+        else if (changeType === 'update') {
+          if (!restoreData) {
+            toast.error("Sem dados para esta reversão.");
+            return;
+          }
+          await updateDoc(artDocRef, {
+            ...restoreData,
+            updatedAt: serverTimestamp()
+          });
+          toast.success(`Alterações revertidas com sucesso!`);
+        }
+        else if (changeType === 'status') {
+          if (!restoreData) {
+            toast.error("Sem dados para esta reversão.");
+            return;
+          }
+          await updateDoc(artDocRef, {
+            status: restoreData.status,
+            position: restoreData.position !== undefined ? restoreData.position : 1000,
+            updatedAt: serverTimestamp()
+          });
+          toast.success(`Posição/Status revertido com sucesso!`);
+        }
+      }
+
+      // Mark proposal as approved
+      const changeDocRef = doc(db, 'events', event.id, 'pending_changes', change.id);
+      await updateDoc(changeDocRef, {
+        status: 'approved',
+        updatedAt: serverTimestamp()
+      });
+
+      // Refetch / update selectedArt to match approved data
+      if (selectedArt && selectedArt.id === change.targetId) {
+        if (change.type === 'delete') {
+          setSelectedArt(null);
+        } else if (change.type === 'revert' && change.proposedData?.changeType === 'create') {
+          setSelectedArt(null);
+        } else {
+          // Merge local change
+          const updatedProposed = change.type === 'revert' ? change.proposedData?.restoreData : change.proposedData;
+          setSelectedArt(prev => prev ? { ...prev, ...updatedProposed } : null);
+        }
+      }
+
+    } catch (err) {
+      console.error(err);
+      toast.error("Erro ao aprovar a alteração.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRejectPendingChange = async (change: PendingChange) => {
+    setLoading(true);
+    try {
+      const changeDocRef = doc(db, 'events', event.id, 'pending_changes', change.id);
+      await updateDoc(changeDocRef, {
+        status: 'rejected',
+        updatedAt: serverTimestamp()
+      });
+      toast.info("Alteração rejeitada e arquivada.");
+    } catch (err) {
+      console.error(err);
+      toast.error("Erro ao rejeitar a alteração.");
     } finally {
       setLoading(false);
     }
@@ -428,63 +698,70 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
     });
   }, [filteredArts]);
 
+  const getArtCategory = (art: ArtTask, now: Date): 'urgent' | 'medium' | 'low' | 'completed' => {
+    if (['finished', 'delivered'].includes(art.status)) {
+      return 'completed';
+    }
+
+    if (!art.deadline) {
+      return 'low';
+    }
+
+    let parsedDate: Date;
+    try {
+      parsedDate = parseISO(art.deadline);
+    } catch {
+      return 'low';
+    }
+
+    const endOfCurrentWeek = endOfWeek(now, { weekStartsOn: 0 }).getTime();
+    const endOfNextWeek = endOfWeek(addWeeks(now, 1), { weekStartsOn: 0 }).getTime();
+
+    const isThisWeekOrOverdue = parsedDate.getTime() <= endOfCurrentWeek;
+    const isNextWeek = parsedDate.getTime() > endOfCurrentWeek && parsedDate.getTime() <= endOfNextWeek;
+
+    // 1. High priority tasks due this week or overdue are URGENT
+    if (art.priority === 'high' && isThisWeekOrOverdue) {
+      return 'urgent';
+    }
+
+    // 2. Medium priority tasks due this week/overdue OR next week, and
+    //    High priority tasks due next week are MEDIUM
+    if (
+      (art.priority === 'medium' && isThisWeekOrOverdue) ||
+      (art.priority === 'high' && isNextWeek) ||
+      (art.priority === 'medium' && isNextWeek)
+    ) {
+      return 'medium';
+    }
+
+    // 3. Simple/low priority or distant deadlines default to LOW
+    return 'low';
+  };
+
   const summaryStats = useMemo(() => {
     const now = new Date();
     
-    return {
-      urgent: filteredArts.filter(a => 
-        a.priority === 'high' && 
-        !['finished', 'delivered'].includes(a.status) && 
-        a.deadline && isThisWeek(parseISO(a.deadline), { weekStartsOn: 0 })
-      ).length,
-      medium: filteredArts.filter(a => 
-        a.priority === 'medium' && 
-        !['finished', 'delivered'].includes(a.status) && 
-        a.deadline && isSameWeek(parseISO(a.deadline), addWeeks(now, 1), { weekStartsOn: 0 })
-      ).length,
-      low: filteredArts.filter(a => 
-        !['finished', 'delivered'].includes(a.status) && 
-        (a.priority === 'low' || !a.deadline || isAfter(parseISO(a.deadline), endOfWeek(addWeeks(now, 1), { weekStartsOn: 0 })))
-      ).filter(a => {
-        // Exclude those already counted in urgent/medium if they overlap
-        const isUrgent = a.priority === 'high' && a.deadline && isThisWeek(parseISO(a.deadline), { weekStartsOn: 0 });
-        const isMedium = a.priority === 'medium' && a.deadline && isSameWeek(parseISO(a.deadline), addWeeks(now, 1), { weekStartsOn: 0 });
-        return !isUrgent && !isMedium;
-      }).length,
-      completed: filteredArts.filter(a => ['finished', 'delivered'].includes(a.status)).length
-    };
+    let urgent = 0;
+    let medium = 0;
+    let low = 0;
+    let completed = 0;
+
+    filteredArts.forEach(art => {
+      const category = getArtCategory(art, now);
+      if (category === 'urgent') urgent++;
+      else if (category === 'medium') medium++;
+      else if (category === 'low') low++;
+      else if (category === 'completed') completed++;
+    });
+
+    return { urgent, medium, low, completed };
   }, [filteredArts]);
 
   const timelineDetailArts = useMemo(() => {
     if (!timelineDetail) return [];
     const now = new Date();
-    switch (timelineDetail) {
-      case 'urgent':
-        return filteredArts.filter(a => 
-          a.priority === 'high' && 
-          !['finished', 'delivered'].includes(a.status) && 
-          a.deadline && isThisWeek(parseISO(a.deadline), { weekStartsOn: 0 })
-        );
-      case 'medium':
-        return filteredArts.filter(a => 
-          a.priority === 'medium' && 
-          !['finished', 'delivered'].includes(a.status) && 
-          a.deadline && isSameWeek(parseISO(a.deadline), addWeeks(now, 1), { weekStartsOn: 0 })
-        );
-      case 'low':
-        return filteredArts.filter(a => 
-          !['finished', 'delivered'].includes(a.status) && 
-          (a.priority === 'low' || !a.deadline || isAfter(parseISO(a.deadline), endOfWeek(addWeeks(now, 1), { weekStartsOn: 0 })))
-        ).filter(a => {
-          const isUrgent = a.priority === 'high' && a.deadline && isThisWeek(parseISO(a.deadline), { weekStartsOn: 0 });
-          const isMedium = a.priority === 'medium' && a.deadline && isSameWeek(parseISO(a.deadline), addWeeks(now, 1), { weekStartsOn: 0 });
-          return !isUrgent && !isMedium;
-        });
-      case 'completed':
-        return filteredArts.filter(a => ['finished', 'delivered'].includes(a.status));
-      default:
-        return [];
-    }
+    return filteredArts.filter(art => getArtCategory(art, now) === timelineDetail);
   }, [timelineDetail, filteredArts]);
 
   const scroll = (direction: 'left' | 'right') => {
@@ -974,36 +1251,31 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
                                       )}
                                     >
                                       <div className={`absolute top-0 left-0 w-1 h-full shadow-[2px_0_15px_rgba(255,255,255,0.05)] ${getPriorityColor(art.priority)}`} />
-                                      <CardContent className="p-2.5 space-y-2">
-                                        <div className="flex justify-between items-start -mb-4 relative z-10 px-1.5 pt-0.5">
-                                          <div>
-                                            {activeChange ? (
-                                              <span className={cn(
-                                                "px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider inline-flex items-center gap-1 border animate-pulse",
-                                                activeChange.type === 'create' ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30 shadow-[0_0_8px_rgba(16,185,129,0.2)]" :
-                                                activeChange.type === 'update' ? "bg-amber-500/20 text-amber-400 border-amber-500/30" :
-                                                activeChange.type === 'status' ? "bg-purple-500/20 text-purple-400 border-purple-500/30" :
-                                                "bg-rose-500/20 text-rose-400 border-rose-500/30 font-bold"
-                                              )}>
-                                                <Clock className="w-2 h-2 animate-pulse" />
-                                                {activeChange.type === 'create' ? "Novo" :
-                                                 activeChange.type === 'update' ? "Editado" :
-                                                 activeChange.type === 'status' ? "Movido" :
-                                                 "Excluindo"}
-                                              </span>
-                                            ) : art.isPendingCreate ? (
-                                              <span className="px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider inline-flex items-center gap-1 border bg-emerald-500/20 text-emerald-400 border-emerald-500/30 shadow-[0_0_8px_rgba(16,185,129,0.2)] animate-pulse">
-                                                <Clock className="w-2 h-2 animate-pulse" />
-                                                Novo
-                                              </span>
-                                            ) : null}
-                                          </div>
-                                          <span className="text-sm filter drop-shadow-[0_0_8px_rgba(255,255,255,0.2)]">
-                                            {art.category === 'dj' && '🎧'}
-                                            {art.category === 'party' && '🎪'}
-                                            {art.category === 'branding' && '⭐️'}
-                                          </span>
-                                        </div>
+                                      {(() => {
+                                        const activeChange = pendingChanges.find(c => c.targetId === art.id && c.status === 'pending');
+                                        const hasBadge = !!activeChange || art.isPendingCreate || art.isPendingDelete;
+                                        return (
+                                          <CardContent className={cn("p-2.5 space-y-2", hasBadge && "pt-1.5")}>
+                                            {hasBadge ? (
+                                              <div className="flex justify-between items-center mb-3 relative z-10 px-1.5 pt-0">
+                                                <div>
+                                                  {renderPendingBadge(art)}
+                                                </div>
+                                                <span className="text-sm filter drop-shadow-[0_0_8px_rgba(255,255,255,0.2)]">
+                                                  {art.category === 'dj' && '🎧'}
+                                                  {art.category === 'party' && '🎪'}
+                                                  {art.category === 'branding' && '⭐️'}
+                                                </span>
+                                              </div>
+                                            ) : (
+                                              <div className="flex justify-end items-start -mb-4 relative z-10 pr-1.5">
+                                                <span className="text-sm filter drop-shadow-[0_0_8px_rgba(255,255,255,0.2)]">
+                                                  {art.category === 'dj' && '🎧'}
+                                                  {art.category === 'party' && '🎪'}
+                                                  {art.category === 'branding' && '⭐️'}
+                                                </span>
+                                              </div>
+                                            )}
 
                                         <div className="space-y-0.5 pl-1.5">
                                           <h4 className="font-black text-white text-[12px] leading-tight group-hover:text-pink-300 transition-colors uppercase tracking-tight pr-6">{art.title}</h4>
@@ -1035,7 +1307,9 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
                                           )}
                                         </div>
                                       </CardContent>
-                                    </Card>
+                                    );
+                                  })()}
+                                </Card>
                                   </motion.div>
                                 </div>
                               );
@@ -1084,13 +1358,19 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
                   layout
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
-                  className="group relative bg-white/[0.02] hover:bg-white/5 border border-white/5 rounded-2xl p-4 md:p-6 transition-all hover:scale-[1.01] hover:shadow-2xl overflow-hidden cursor-pointer"
+                  className={cn(
+                    "group relative bg-white/[0.02] hover:bg-white/5 border border-white/5 rounded-2xl p-4 md:p-6 transition-all hover:scale-[1.01] hover:shadow-2xl overflow-hidden cursor-pointer",
+                    art.isPendingDelete && "opacity-50 border-rose-500/30"
+                  )}
                   onClick={() => setSelectedArt(art)}
                 >
                   <div className={`absolute top-0 left-0 w-1.5 h-full ${getPriorityColor(art.priority)}`} />
                   <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_1fr_1fr_80px] gap-4 items-center">
                     <div className="space-y-1">
-                      <h4 className="text-sm font-black text-white group-hover:text-pink-400 transition-all uppercase italic">{art.title}</h4>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className="text-sm font-black text-white group-hover:text-pink-400 transition-all uppercase italic">{art.title}</h4>
+                        {renderPendingBadge(art)}
+                      </div>
                       <p className="text-[11px] text-slate-500 line-clamp-1 italic">{art.description || 'Sem descrição'}</p>
                     </div>
                     <div className="flex justify-center">
@@ -1229,14 +1509,16 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
                                   {...provided.dragHandleProps}
                                   onClick={() => !snapshot.isDragging && setSelectedArt(task)}
                                   className={cn(
-                                    "w-full text-left p-2 rounded-lg text-[9px] font-black uppercase tracking-tight border border-white/5 transition-all line-clamp-1",
+                                    "w-full text-left p-2 rounded-lg text-[9px] font-black uppercase tracking-tight border border-white/5 transition-all flex items-center justify-between gap-1 min-w-0",
                                     task.priority === 'high' ? "bg-red-500/20 text-red-400 border-red-500/20" :
                                     task.priority === 'medium' ? "bg-amber-500/20 text-amber-400 border-amber-500/20" :
                                     "bg-emerald-500/20 text-emerald-400 border-emerald-500/20",
+                                    task.isPendingDelete && "opacity-50 border-rose-500/30",
                                     snapshot.isDragging && "z-50 shadow-2xl scale-105 rotate-2 brightness-125"
                                   )}
                                 >
-                                  {task.title}
+                                  <span className="truncate flex-1">{task.title}</span>
+                                  {renderPendingBadge(task, true)}
                                 </div>
                               );
                               if (snapshot.isDragging) {
@@ -1258,98 +1540,346 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
       )}
 
       {viewMode === 'timeline' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            onClick={() => setTimelineDetail('urgent')}
-            className="group relative bg-white/[0.02] border border-white/5 rounded-[2.5rem] p-8 hover:bg-white/5 transition-all hover:scale-[1.02] cursor-pointer shadow-2xl overflow-hidden"
-          >
-            <div className="absolute top-0 left-0 w-full h-1 bg-red-500 shadow-[0_0_20px_#ef4444]" />
-            <div className="space-y-4">
-              <div className="flex flex-col">
-                <span className="text-sm font-black text-red-500 uppercase italic tracking-tighter">Urgente</span>
-                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none">esta semana</span>
+        <div className="space-y-12">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              onClick={() => setTimelineDetail('urgent')}
+              className="group relative bg-white/[0.02] border border-white/5 rounded-[2.5rem] p-8 hover:bg-white/5 transition-all hover:scale-[1.02] cursor-pointer shadow-2xl overflow-hidden"
+            >
+              <div className="absolute top-0 left-0 w-full h-1 bg-red-500 shadow-[0_0_20px_#ef4444]" />
+              <div className="space-y-4">
+                <div className="flex flex-col">
+                  <span className="text-sm font-black text-red-500 uppercase italic tracking-tighter">Urgente</span>
+                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none">esta semana</span>
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-6xl font-black text-white italic tracking-tighter">{summaryStats.urgent}</span>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">artes</span>
+                </div>
+                <p className="text-xs text-slate-500 italic">com prazo próximo e alta prioridade no cronograma atual</p>
               </div>
-              <div className="flex items-baseline gap-2">
-                <span className="text-6xl font-black text-white italic tracking-tighter">{summaryStats.urgent}</span>
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">artes</span>
-              </div>
-              <p className="text-xs text-slate-500 italic">com prazo próximo e alta prioridade no cronograma atual</p>
-            </div>
-          </motion.div>
+            </motion.div>
 
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            onClick={() => setTimelineDetail('medium')}
-            className="group relative bg-white/[0.02] border border-white/5 rounded-[2.5rem] p-8 hover:bg-white/5 transition-all hover:scale-[1.02] cursor-pointer shadow-2xl overflow-hidden"
-          >
-            <div className="absolute top-0 left-0 w-full h-1 bg-amber-500 shadow-[0_0_20px_#f59e0b]" />
-            <div className="space-y-4">
-              <div className="flex flex-col">
-                <span className="text-sm font-black text-amber-500 uppercase italic tracking-tighter">Média</span>
-                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none">semana que vem</span>
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+              onClick={() => setTimelineDetail('medium')}
+              className="group relative bg-white/[0.02] border border-white/5 rounded-[2.5rem] p-8 hover:bg-white/5 transition-all hover:scale-[1.02] cursor-pointer shadow-2xl overflow-hidden"
+            >
+              <div className="absolute top-0 left-0 w-full h-1 bg-amber-500 shadow-[0_0_20px_#f59e0b]" />
+              <div className="space-y-4">
+                <div className="flex flex-col">
+                  <span className="text-sm font-black text-amber-500 uppercase italic tracking-tighter">Média</span>
+                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none">semana que vem</span>
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-6xl font-black text-white italic tracking-tighter">{summaryStats.medium}</span>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">artes</span>
+                </div>
+                <p className="text-xs text-slate-500 italic">programadas para entrega no próximo ciclo de produção</p>
               </div>
-              <div className="flex items-baseline gap-2">
-                <span className="text-6xl font-black text-white italic tracking-tighter">{summaryStats.medium}</span>
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">artes</span>
-              </div>
-              <p className="text-xs text-slate-500 italic">programadas para entrega no próximo ciclo de produção</p>
-            </div>
-          </motion.div>
+            </motion.div>
 
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            onClick={() => setTimelineDetail('low')}
-            className="group relative bg-white/[0.02] border border-white/5 rounded-[2.5rem] p-8 hover:bg-white/5 transition-all hover:scale-[1.02] cursor-pointer shadow-2xl overflow-hidden"
-          >
-            <div className="absolute top-0 left-0 w-full h-1 bg-blue-500 shadow-[0_0_20px_#3b82f6]" />
-            <div className="space-y-4">
-              <div className="flex flex-col">
-                <span className="text-sm font-black text-blue-500 uppercase italic tracking-tighter">Baixa</span>
-                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none">próximas semanas</span>
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+              onClick={() => setTimelineDetail('low')}
+              className="group relative bg-white/[0.02] border border-white/5 rounded-[2.5rem] p-8 hover:bg-white/5 transition-all hover:scale-[1.02] cursor-pointer shadow-2xl overflow-hidden"
+            >
+              <div className="absolute top-0 left-0 w-full h-1 bg-blue-500 shadow-[0_0_20px_#3b82f6]" />
+              <div className="space-y-4">
+                <div className="flex flex-col">
+                  <span className="text-sm font-black text-blue-500 uppercase italic tracking-tighter">Baixa</span>
+                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none">próximas semanas</span>
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-6xl font-black text-white italic tracking-tighter">{summaryStats.low}</span>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">artes</span>
+                </div>
+                <p className="text-xs text-slate-500 italic">no pipeline de criação e aguardando definição de prazo</p>
               </div>
-              <div className="flex items-baseline gap-2">
-                <span className="text-6xl font-black text-white italic tracking-tighter">{summaryStats.low}</span>
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">artes</span>
-              </div>
-              <p className="text-xs text-slate-500 italic">no pipeline de criação e aguardando definição de prazo</p>
-            </div>
-          </motion.div>
+            </motion.div>
 
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            onClick={() => setTimelineDetail('completed')}
-            className="group relative bg-white/[0.02] border border-white/5 rounded-[2.5rem] p-8 hover:bg-white/5 transition-all hover:scale-[1.02] cursor-pointer shadow-2xl overflow-hidden"
-          >
-            <div className="absolute top-0 left-0 w-full h-1 bg-emerald-500 shadow-[0_0_20px_#10b981]" />
-            <div className="space-y-4">
-              <div className="flex flex-col">
-                <span className="text-sm font-black text-emerald-500 uppercase italic tracking-tighter">Concluídas</span>
-                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none">entregas realizadas</span>
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+              onClick={() => setTimelineDetail('completed')}
+              className="group relative bg-white/[0.02] border border-white/5 rounded-[2.5rem] p-8 hover:bg-white/5 transition-all hover:scale-[1.02] cursor-pointer shadow-2xl overflow-hidden"
+            >
+              <div className="absolute top-0 left-0 w-full h-1 bg-emerald-500 shadow-[0_0_20px_#10b981]" />
+              <div className="space-y-4">
+                <div className="flex flex-col">
+                  <span className="text-sm font-black text-emerald-500 uppercase italic tracking-tighter">Concluídas</span>
+                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none">entregas realizadas</span>
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-6xl font-black text-white italic tracking-tighter">{summaryStats.completed}</span>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">artes</span>
+                </div>
+                <p className="text-xs text-slate-500 italic">finalizadas e entregues com sucesso para o cliente</p>
               </div>
-              <div className="flex items-baseline gap-2">
-                <span className="text-6xl font-black text-white italic tracking-tighter">{summaryStats.completed}</span>
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">artes</span>
+            </motion.div>
+          </div>
+
+          <div className="space-y-6 pt-4">
+            <div className="flex items-center justify-between border-b border-white/5 pb-4">
+              <div>
+                <h3 className="text-lg font-black text-white italic tracking-tight uppercase">Cronograma de Atividades</h3>
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Distribuição cronológica das artes agendadas</p>
               </div>
-              <p className="text-xs text-slate-500 italic">finalizadas e entregues com sucesso para o cliente</p>
             </div>
-          </motion.div>
+
+            {timelineData.length === 0 ? (
+              <div className="text-center py-16 text-slate-500 bg-white/[0.01] rounded-[2.5rem] border border-dashed border-white/5 flex flex-col items-center justify-center">
+                <Calendar className="w-12 h-12 text-slate-600 mb-3" />
+                <p className="text-xs font-black uppercase tracking-widest">Nenhuma atividade agendada</p>
+                <p className="text-[10px] text-slate-600 mt-1 max-w-[280px]">Defina prazos ou crie novos cards para visualizá-los ordenados no tempo.</p>
+              </div>
+            ) : (
+              <div className="relative pl-6 sm:pl-8 border-l border-white/5 space-y-8 py-2 ml-4">
+                {timelineData.map(([dateKey, artsForDate]) => {
+                  const isNoDeadline = dateKey === 'Sem Prazo';
+                  let formattedDate = dateKey;
+                  if (!isNoDeadline) {
+                    try {
+                      formattedDate = format(parseISO(dateKey), "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
+                    } catch {
+                      formattedDate = dateKey;
+                    }
+                  }
+
+                  return (
+                    <div key={dateKey} className="relative group/day">
+                      <div className="absolute -left-[31px] sm:-left-[39px] top-1.5 w-4 h-4 rounded-full bg-zinc-950 border-2 border-pink-500 z-10 flex items-center justify-center group-hover/day:scale-125 transition-all shadow-[0_0_10px_rgba(236,72,153,0.3)]">
+                        <div className="w-1.5 h-1.5 rounded-full bg-pink-500 animate-pulse" />
+                      </div>
+
+                      <div className="space-y-3">
+                        <div className="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-3">
+                          <h4 className="text-sm font-black text-pink-400 tracking-wider uppercase italic">
+                            {isNoDeadline ? "Sem Prazo" : formattedDate}
+                          </h4>
+                          <span className="text-[9px] text-slate-500 font-extrabold uppercase tracking-widest">
+                            ({artsForDate.length} {artsForDate.length === 1 ? 'Arte' : 'Artes'})
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                          {artsForDate.map(art => (
+                            <div
+                              key={art.id}
+                              onClick={() => setSelectedArt(art)}
+                              className="group/card p-5 rounded-[2rem] bg-white/[0.02] border border-white/5 hover:bg-white/[0.04] hover:border-white/10 transition-all duration-300 cursor-pointer flex flex-col justify-between min-h-[120px] shadow-lg relative overflow-hidden"
+                            >
+                              <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${getPriorityColor(art.priority)}`} />
+                              
+                              <div className="space-y-2 pl-2">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 bg-white/5 px-2 py-0.5 rounded-full">
+                                    {translateCategory(art.category)}
+                                  </span>
+                                  <Badge className={cn("text-[8px] font-black uppercase tracking-widest border-none shrink-0 px-2 py-0.5", getPriorityColor(art.priority))}>
+                                    {translatePriority(art.priority)}
+                                  </Badge>
+                                </div>
+                                <h5 className="text-xs font-black text-white uppercase italic group-hover/card:text-pink-400 transition-all line-clamp-2">
+                                  {art.title}
+                                </h5>
+                              </div>
+
+                              <div className="flex items-center justify-between pt-4 border-t border-white/[0.03] text-[9px] font-extrabold uppercase text-slate-400 pl-2">
+                                <span className="px-2 py-0.5 rounded-full bg-white/5 text-slate-300 font-bold border border-white/5">
+                                  {translateStatus(art.status)}
+                                </span>
+                                {art.deadline && (
+                                  <span className="flex items-center gap-1 select-none text-slate-500">
+                                    <Clock className="w-3 h-3 text-pink-500" />
+                                    {format(parseISO(art.deadline), "dd/MM")}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
       <Dialog open={!!selectedArt} onOpenChange={(open) => !open && setSelectedArt(null)}>
-        <DialogContent className="rounded-[2.5rem] sm:max-w-[600px] glass border-white/10 text-slate-100 p-0 overflow-hidden">
+        <DialogContent className="rounded-[2.5rem] sm:max-w-[600px] glass border-white/10 text-slate-100 p-0 max-h-[90vh] overflow-y-auto custom-scrollbar">
           {selectedArt && editArt && (
             <div className="flex flex-col">
               <div className={`h-2 w-full ${getPriorityColor(editArt.priority || 'medium')} shadow-[0_4px_10px_rgba(0,0,0,0.3)]`} />
-              <div className="p-8 space-y-8">
+              <div className="p-8 space-y-6">
+                {activeTab === 'details' && (
+                  <div className="space-y-6">
+                    {(() => {
+                  const activeChangesForArt = pendingChanges
+                    .filter(c => c.targetId === selectedArt.id && c.status === 'pending')
+                    .sort((a, b) => {
+                      const tA = a.createdAt?.seconds || a.createdAt?.toMillis?.() || 0;
+                      const tB = b.createdAt?.seconds || b.createdAt?.toMillis?.() || 0;
+                      return tA - tB; // Oldest first to show chain of history chronologically
+                    });
+
+                  if (activeChangesForArt.length === 0) return null;
+
+                  const formatSafeDate = (timestamp: any) => {
+                    if (!timestamp) return 'Agora';
+                    const date = typeof timestamp.toDate === 'function' ? timestamp.toDate() : new Date(timestamp);
+                    try {
+                      return format(date, "dd/MM 'às' HH:mm", { locale: ptBR });
+                    } catch {
+                      return 'Sem data';
+                    }
+                  };
+
+                  return (
+                    <div className="p-4 rounded-[2rem] bg-amber-500/5 border border-amber-500/10 space-y-2.5 relative overflow-hidden backdrop-blur-md">
+                      <div className="flex items-center gap-2 text-amber-400 font-black text-[10px] uppercase tracking-wider">
+                        <Clock className="w-3.5 h-3.5 animate-pulse" />
+                        <span>Alterações Ativas Pendentes de Validação ({activeChangesForArt.length})</span>
+                      </div>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/5 pb-2">
+                        <div className="text-[10px] text-slate-400 leading-normal font-semibold">
+                          Alterações aguardando aprovação do designer:
+                        </div>
+                        {profile.role !== 'contractor' && (
+                          <Button 
+                            type="button"
+                            onClick={() => setIsValidationDialogOpen(true)}
+                            className="h-7 px-3 rounded-lg text-[9px] font-black uppercase tracking-widest bg-amber-500 hover:bg-amber-600 text-black flex items-center justify-center gap-1 shadow-lg shadow-amber-500/10 border-none transition-all select-none self-start"
+                          >
+                            <Palette className="w-3 h-3" />
+                            Validar Alterações
+                          </Button>
+                        )}
+                      </div>
+                      
+                      <div className="space-y-4 max-h-[150px] overflow-y-auto pr-1 custom-scrollbar">
+                        {activeChangesForArt.map((activeChange, index) => {
+                          const isUpdate = activeChange.type === 'update';
+                          return (
+                            <div key={activeChange.id} className="pt-2.5 border-t border-white/5 space-y-2.5">
+                              <div className="flex items-center justify-between text-[10px] text-slate-400 font-bold">
+                                <span className="bg-amber-500/10 text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/20 uppercase tracking-wider text-[9px]">
+                                  Solicitação #{index + 1}
+                                </span>
+                                <span>{formatSafeDate(activeChange.createdAt)} • por {activeChange.contractorName || 'Cliente'}</span>
+                              </div>
+                              
+                              <div className="grid grid-cols-2 gap-3 text-[10px]">
+                                {(activeChange.type === 'update' || activeChange.type === 'status') && (
+                                  <>
+                                    {/* 1. Categoria */}
+                                    {activeChange.originalData?.category !== activeChange.proposedData?.category && (
+                                      <div className="col-span-2 flex items-center gap-2">
+                                        <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 mr-2">Categoria:</span>
+                                        <span className="line-through text-slate-500">{translateCategory(activeChange.originalData?.category)}</span>
+                                        <ArrowRight className="w-3 h-3 text-slate-500" />
+                                        <span className="text-amber-400 font-bold">{translateCategory(activeChange.proposedData?.category)}</span>
+                                      </div>
+                                    )}
+
+                                    {/* 2. Prioridade */}
+                                    {activeChange.originalData?.priority !== activeChange.proposedData?.priority && (
+                                      <div className="col-span-2 flex items-center gap-2">
+                                        <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 mr-2">Prioridade:</span>
+                                        <span className="line-through text-slate-500">{translatePriority(activeChange.originalData?.priority)}</span>
+                                        <ArrowRight className="w-3 h-3 text-slate-500" />
+                                        <span className="text-amber-400 font-bold">{translatePriority(activeChange.proposedData?.priority)}</span>
+                                      </div>
+                                    )}
+
+                                    {/* 3. Titulo */}
+                                    {activeChange.originalData?.title !== activeChange.proposedData?.title && (
+                                      <div className="col-span-2 space-y-1">
+                                        <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Mudança no Título:</span>
+                                        <div className="grid grid-cols-2 gap-3 text-[10px]">
+                                          <div className="p-2.5 rounded-xl bg-white/5 border border-white/5 text-slate-400">
+                                            <span className="font-bold block text-slate-500 mb-1">Original:</span>
+                                            <span>{activeChange.originalData?.title}</span>
+                                          </div>
+                                          <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300">
+                                            <span className="font-bold block text-amber-400 mb-1">Proposto:</span>
+                                            <span>{activeChange.proposedData?.title}</span>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* 4. Status */}
+                                    {activeChange.originalData?.status !== activeChange.proposedData?.status && (
+                                      <div className="col-span-2 flex items-center gap-2">
+                                        <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 mr-2">Status:</span>
+                                        <span className="line-through text-slate-500">{translateStatus(activeChange.originalData?.status)}</span>
+                                        <ArrowRight className="w-3 h-3 text-slate-500" />
+                                        <span className="text-amber-400 font-bold">{translateStatus(activeChange.proposedData?.status)}</span>
+                                      </div>
+                                    )}
+
+                                    {/* 5. Data (Prazo) */}
+                                    {activeChange.originalData?.deadline !== activeChange.proposedData?.deadline && (
+                                      <div className="col-span-2 flex items-center gap-2">
+                                        <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 mr-4">Prazo:</span>
+                                        <span className="line-through text-slate-500">
+                                          {activeChange.originalData?.deadline ? format(parseISO(activeChange.originalData?.deadline), "dd/MM/yyyy") : 'Sem prazo'}
+                                        </span>
+                                        <ArrowRight className="w-3 h-3 text-slate-500" />
+                                        <span className="text-amber-400 font-bold">
+                                          {activeChange.proposedData?.deadline ? format(parseISO(activeChange.proposedData?.deadline), "dd/MM/yyyy") : 'Sem prazo'}
+                                        </span>
+                                      </div>
+                                    )}
+
+                                    {/* 6. Descrição */}
+                                    {activeChange.originalData?.description !== activeChange.proposedData?.description && (
+                                      <div className="col-span-2 space-y-1">
+                                        <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Mudança na Descrição:</span>
+                                        <div className="grid grid-cols-2 gap-3 text-[10px]">
+                                          <div className="p-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-slate-400 max-h-[60px] overflow-y-auto custom-scrollbar">
+                                            <span className="font-bold block text-red-400 mb-0.5">Original:</span>
+                                            <span className="italic">{activeChange.originalData?.description || "Sem descrição"}</span>
+                                          </div>
+                                          <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 max-h-[60px] overflow-y-auto custom-scrollbar">
+                                            <span className="font-bold block text-emerald-400 mb-0.5">Proposto:</span>
+                                            <span className="italic">{activeChange.proposedData?.description || "Sem descrição"}</span>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </>
+                                )}
+                                {activeChange.type === 'delete' && (
+                                  <div className="col-span-2 text-rose-400 font-bold italic">
+                                    Solicitação de exclusão permanente deste card.
+                                  </div>
+                                )}
+                                {activeChange.type === 'create' && (
+                                  <div className="col-span-2 text-emerald-400 font-bold italic">
+                                    Solicitação de criação para este novo card.
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 <DialogHeader className="space-y-4">
                   <div className="flex items-center justify-between">
                     <div className="flex flex-wrap gap-2">
@@ -1420,53 +1950,6 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
                 </DialogHeader>
 
                 <div className="space-y-6">
-                  {(() => {
-                    const activeChange = pendingChanges.find(c => c.targetId === selectedArt.id && c.status === 'pending');
-                    if (!activeChange) return null;
-                    return (
-                      <div className="p-5 rounded-[2rem] bg-amber-500/5 border border-amber-500/10 space-y-3 relative overflow-hidden backdrop-blur-md">
-                        <div className="flex items-center gap-2 text-amber-400 font-black text-[10px] uppercase tracking-wider">
-                          <Clock className="w-3.5 h-3.5 animate-pulse" />
-                          <span>Alterações Ativas Pendentes de Validação</span>
-                        </div>
-                        <div className="text-[11px] text-slate-300 leading-relaxed font-semibold">
-                          Esta tarefa possui as seguintes alterações sugeridas pelo contratante que estão aguardando aprovação do designer:
-                        </div>
-                        <div className="grid grid-cols-2 gap-4 pt-2 border-t border-white/5">
-                          {activeChange.originalData?.description !== activeChange.proposedData?.description && (
-                            <div className="col-span-2 space-y-1">
-                              <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Mudança na Descrição:</span>
-                              <div className="grid grid-cols-2 gap-3 text-[10px]">
-                                <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-slate-400 max-h-[140px] overflow-y-auto">
-                                  <span className="font-bold block text-red-400 mb-1">Original:</span>
-                                  <span className="italic">{activeChange.originalData?.description || "Sem descrição"}</span>
-                                </div>
-                                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 max-h-[140px] overflow-y-auto">
-                                  <span className="font-bold block text-emerald-400 mb-1">Proposto:</span>
-                                  <span className="italic">{activeChange.proposedData?.description || "Sem descrição"}</span>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                          {activeChange.originalData?.title !== activeChange.proposedData?.title && (
-                            <div className="col-span-2 space-y-1">
-                              <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Mudança no Título:</span>
-                              <div className="grid grid-cols-2 gap-3 text-[10px]">
-                                <div className="p-2.5 rounded-xl bg-white/5 border border-white/5 text-slate-400">
-                                  <span className="font-bold block text-slate-500 mb-1">Original:</span>
-                                  <span>{activeChange.originalData?.title}</span>
-                                </div>
-                                <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300">
-                                  <span className="font-bold block text-amber-400 mb-1">Proposto:</span>
-                                  <span>{activeChange.proposedData?.title}</span>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })()}
 
                   <div className="space-y-3">
                     <Label className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] px-2 italic">Descrição & Instruções</Label>
@@ -1479,7 +1962,7 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
                   </div>
                 </div>
 
-                <div className="flex gap-4 pt-4">
+                <div className="flex gap-3 pt-4">
                   <Button 
                     onClick={handleSaveArt}
                     disabled={loading}
@@ -1487,17 +1970,403 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
                   >
                     {loading ? "Salvando..." : "Salvar Alterações"}
                   </Button>
+                  <Button
+                    type="button"
+                    onClick={() => setActiveTab('history')}
+                    className="px-6 rounded-[1.5rem] h-14 bg-white/5 border border-white/10 hover:bg-white/10 text-white font-black uppercase text-[10px] tracking-widest transition-all flex items-center gap-2 shrink-0 pr-6 pl-4"
+                  >
+                    <History className="w-4 h-4 text-pink-500" />
+                    <span>Histórico</span>
+                  </Button>
                   <Button 
                     variant="destructive" 
                     onClick={() => handleDeleteArt(selectedArt.id)}
-                    className="w-14 h-14 rounded-[1.5rem] border-none bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition-all shadow-[0_0_15px_rgba(239,68,68,0.1)]"
+                    className="w-14 h-14 rounded-[1.5rem] border-none bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition-all shadow-[0_0_15px_rgba(239,68,68,0.1)] shrink-0"
                   >
                     <Palette className="w-5 h-5 rotate-45" />
                   </Button>
                 </div>
+                </div>
+                )}
+
+                {/* HISTORY TIMELINE TAB */}
+                {activeTab === 'history' && (
+                  <div className="space-y-6">
+                    <div className="flex flex-col">
+                      <h3 className="text-lg font-black text-white italic tracking-tight uppercase">Histórico de Alterações</h3>
+                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">
+                        Versões salvas e aprovadas para esta atividade
+                      </span>
+                    </div>
+
+                    {(() => {
+                      const artHistory = pendingChanges
+                        .filter(c => c.targetId === selectedArt.id && ['approved', 'reverted'].includes(c.status))
+                        .sort((a, b) => {
+                          const tA = a.createdAt?.seconds || a.createdAt?.toMillis?.() || 0;
+                          const tB = b.createdAt?.seconds || b.createdAt?.toMillis?.() || 0;
+                          return tB - tA; // Newest first!
+                        });
+
+                      if (artHistory.length === 0) {
+                        return (
+                          <div className="text-center py-12 text-slate-500 bg-white/[0.01] rounded-3xl border border-dashed border-white/5">
+                            <History className="w-8 h-8 text-slate-600 mx-auto mb-3" />
+                            <p className="text-[10px] font-black uppercase tracking-widest">Nenhuma alteração registrada no histórico</p>
+                            <p className="text-[9px] text-slate-600 mt-1 max-w-xs mx-auto leading-normal">Modificações aprovadas ou revertidas aparecerão aqui para serem restauradas.</p>
+                          </div>
+                        );
+                      }
+
+                      const formatSafeDateLocal = (timestamp: any) => {
+                        if (!timestamp) return 'Agora';
+                        const date = typeof timestamp.toDate === 'function' ? timestamp.toDate() : new Date(timestamp);
+                        try {
+                          return format(date, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
+                        } catch {
+                          return 'Sem data';
+                        }
+                      };
+
+                      return (
+                        <div className="space-y-4 max-h-[450px] overflow-y-auto pr-1 custom-scrollbar">
+                          {artHistory.map((change) => {
+                            const isRevertible = change.originalData && Object.keys(change.originalData).length > 0;
+                            return (
+                              <div key={change.id} className="p-4 rounded-2xl bg-white/[0.02] border border-white/5 space-y-3 relative overflow-hidden">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <div className={cn(
+                                      "p-1.5 rounded-full text-xs font-bold",
+                                      change.status === 'reverted' ? "bg-amber-500/10 text-amber-400" : "bg-emerald-500/10 text-emerald-400"
+                                    )}>
+                                      {change.status === 'reverted' ? <RotateCcw className="w-3.5 h-3.5" /> : <Clock className="w-3.5 h-3.5" />}
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                      <span className="text-xs font-black text-white block truncate max-w-[200px]">{change.title || 'Alteração de Valores'}</span>
+                                      <span className="text-[9px] text-slate-400 font-bold block leading-none">
+                                        por {change.contractorName} • {formatSafeDateLocal(change.createdAt)}
+                                      </span>
+                                    </div>
+                                  </div>
+                                  <Badge className={cn(
+                                    "text-[8px] font-black uppercase tracking-widest shrink-0",
+                                    change.status === 'reverted' ? "bg-amber-500/20 text-amber-400 border-amber-500/30" : "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                                  )}>
+                                    {change.status === 'reverted' ? 'Revertido' : 'Ativo'}
+                                  </Badge>
+                                </div>
+
+                                <div className="bg-black/30 p-3 rounded-xl border border-white/[0.03] text-[10px] space-y-2 font-medium">
+                                  {change.type === 'update' && change.originalData && change.proposedData && (
+                                    <div className="space-y-1.5 text-slate-300">
+                                      {change.originalData.title !== change.proposedData.title && (
+                                        <div>
+                                          <span className="text-slate-500 text-[8px] font-black uppercase block">Título alterado:</span>
+                                          <span className="line-through text-slate-500">{change.originalData.title}</span>
+                                          <ArrowRight className="w-2.5 h-2.5 inline mx-1.5 text-slate-500" />
+                                          <span className="text-white font-bold">{change.proposedData.title}</span>
+                                        </div>
+                                      )}
+                                      
+                                      {change.originalData.description !== change.proposedData.description && (
+                                        <div>
+                                          <span className="text-slate-500 text-[8px] font-black uppercase block">Breve alterado:</span>
+                                          <div className="grid grid-cols-2 gap-2 mt-0.5">
+                                            <span className="text-slate-500 line-through truncate block">{change.originalData.description || '(Vazio)'}</span>
+                                            <span className="text-slate-200 block truncate font-bold">{change.proposedData.description || '(Vazio)'}</span>
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      {change.originalData.status !== change.proposedData.status && (
+                                        <div>
+                                          <span className="text-slate-500 text-[8px] font-black uppercase block">Status alterado:</span>
+                                          <span className="line-through text-slate-500">{translateStatus(change.originalData.status)}</span>
+                                          <ArrowRight className="w-2.5 h-2.5 inline mx-1.5 text-slate-500" />
+                                          <span className="text-white font-bold">{translateStatus(change.proposedData.status)}</span>
+                                        </div>
+                                      )}
+
+                                      {change.originalData.priority !== change.proposedData.priority && (
+                                        <div>
+                                          <span className="text-slate-500 text-[8px] font-black uppercase block">Prioridade alterada:</span>
+                                          <span className="line-through text-slate-500">{translatePriority(change.originalData.priority)}</span>
+                                          <ArrowRight className="w-2.5 h-2.5 inline mx-1.5 text-slate-500" />
+                                          <span className="text-white font-bold">{translatePriority(change.proposedData.priority)}</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+
+                                  {change.type === 'status' && change.originalData && change.proposedData && (
+                                    <div className="text-slate-300">
+                                      <span className="text-slate-500 text-[8px] font-black uppercase block">Movimentação no Kanban:</span>
+                                      <span className="line-through text-slate-500">{translateStatus(change.originalData.status)}</span>
+                                      <ArrowRight className="w-2.5 h-2.5 inline mx-1.5 text-slate-500" />
+                                      <span className="text-white font-bold">{translateStatus(change.proposedData.status)}</span>
+                                    </div>
+                                  )}
+
+                                  {change.type === 'create' && (
+                                    <span className="text-emerald-400 block font-bold">Criação inicial de atividade.</span>
+                                  )}
+
+                                  {change.type === 'revert' && (
+                                    <span className="text-amber-400 block font-bold">Reversão de atividade restaurando valores antigos.</span>
+                                  )}
+                                </div>
+
+                                {isRevertible && change.status !== 'reverted' && (
+                                  <div className="flex justify-end pt-1">
+                                    {isMasterDesigner ? (
+                                      <Button
+                                        type="button"
+                                        onClick={() => handleDirectRevert(change)}
+                                        disabled={loading}
+                                        className="h-8 rounded-xl text-[10px] font-black bg-amber-500 hover:bg-amber-600 text-white flex items-center gap-1 shadow-md shadow-amber-500/10"
+                                      >
+                                        <RotateCcw className="w-3.5 h-3.5" />
+                                        Reverter para esta versão
+                                      </Button>
+                                    ) : (
+                                      <Button
+                                        type="button"
+                                        onClick={() => handleRequestRevert(change)}
+                                        disabled={loading}
+                                        className="h-8 rounded-xl text-[10px] font-black bg-sky-500 hover:bg-sky-600 text-white flex items-center gap-1 shadow-md shadow-sky-500/10"
+                                      >
+                                        <RotateCcw className="w-3.5 h-3.5" />
+                                        Solicitar Reversão
+                                      </Button>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
+                    <div className="flex gap-4 pt-4 border-t border-white/5 font-bold">
+                      <Button
+                        type="button"
+                        onClick={() => setActiveTab('details')}
+                        className="w-full rounded-[1.5rem] h-14 bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 border-none text-white font-black uppercase text-xs tracking-widest transition-all shadow-[0_0_20px_rgba(236,72,153,0.2)] flex items-center justify-center gap-2"
+                      >
+                        <ArrowRight className="w-4 h-4 rotate-180" />
+                        <span>Voltar para Detalhes</span>
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isValidationDialogOpen} onOpenChange={setIsValidationDialogOpen}>
+        <DialogContent className="rounded-[2.5rem] sm:max-w-[650px] glass border-white/10 text-slate-100 p-0 max-h-[90vh] overflow-hidden flex flex-col">
+          <div className="h-2 w-full bg-gradient-to-r from-amber-500 to-orange-500 shadow-[0_4px_10px_rgba(0,0,0,0.3)] shrink-0" />
+          <div className="p-8 pb-4 shrink-0">
+            <DialogHeader className="space-y-1">
+              <DialogTitle className="text-xl font-black text-white italic tracking-tight uppercase flex items-center gap-2">
+                <Clock className="w-5 h-5 text-amber-500 animate-pulse" />
+                Validar Alterações Pendentes
+              </DialogTitle>
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                Exibindo alterações ativas para a arte: <span className="text-pink-400 italic font-black">{selectedArt?.title || ''}</span>
+              </p>
+            </DialogHeader>
+          </div>
+
+          <div className="flex-1 overflow-y-auto px-8 pb-8 space-y-6 custom-scrollbar">
+            {(() => {
+              const activeChangesForArt = pendingChanges
+                .filter(c => c.targetId === selectedArt?.id && c.status === 'pending')
+                .sort((a, b) => {
+                  const tA = a.createdAt?.seconds || a.createdAt?.toMillis?.() || 0;
+                  const tB = b.createdAt?.seconds || b.createdAt?.toMillis?.() || 0;
+                  return tA - tB;
+                });
+
+              if (activeChangesForArt.length === 0) {
+                return (
+                  <div className="text-center py-12 text-slate-500 bg-white/[0.01] rounded-3xl border border-dashed border-white/5">
+                    <Check className="w-12 h-12 text-emerald-500 mx-auto mb-3 animate-bounce" />
+                    <p className="text-[10px] font-black uppercase tracking-widest">Tudo Validado com Sucesso!</p>
+                    <p className="text-[9px] text-slate-600 mt-1">Nenhuma alteração pendente sobrou para essa arte.</p>
+                  </div>
+                );
+              }
+
+              const formatSafeDateLocal = (timestamp: any) => {
+                if (!timestamp) return 'Agora';
+                const date = typeof timestamp.toDate === 'function' ? timestamp.toDate() : new Date(timestamp);
+                try {
+                  return format(date, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
+                } catch {
+                  return 'Sem data';
+                }
+              };
+
+              return (
+                <div className="space-y-6">
+                  {activeChangesForArt.map((change, idx) => {
+                    return (
+                      <div key={change.id} className="p-5 rounded-3xl bg-white/[0.02] border border-white/5 space-y-4 relative overflow-hidden">
+                        <div className="flex items-center justify-between border-b border-white/5 pb-3">
+                          <span className="bg-amber-500/10 text-amber-300 px-3 py-1 rounded-full border border-amber-500/20 uppercase tracking-widest text-[9px] font-black">
+                            Solicitação #{idx + 1}
+                          </span>
+                          <span className="text-[9px] text-slate-400 font-extrabold uppercase">
+                            por {change.contractorName} • {formatSafeDateLocal(change.createdAt)}
+                          </span>
+                        </div>
+
+                        <div className="space-y-3.5">
+                          {(change.type === 'update' || change.type === 'status') && (
+                            <div className="space-y-3 text-[11px]">
+                              {/* 1. Categoria */}
+                              {change.originalData?.category !== change.proposedData?.category && (
+                                <div className="p-3.5 rounded-2xl bg-black/30 border border-white/[0.03] flex items-center justify-between gap-3">
+                                  <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 font-bold">Categoria</span>
+                                  <div className="flex items-center gap-3">
+                                    <span className="line-through text-slate-500 font-bold">{translateCategory(change.originalData?.category)}</span>
+                                    <ArrowRight className="w-3 select-none h-3 text-slate-500" />
+                                    <span className="text-amber-400 font-black uppercase">{translateCategory(change.proposedData?.category)}</span>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* 2. Prioridade */}
+                              {change.originalData?.priority !== change.proposedData?.priority && (
+                                <div className="p-3.5 rounded-2xl bg-black/30 border border-white/[0.03] flex items-center justify-between gap-3">
+                                  <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 font-bold">Prioridade</span>
+                                  <div className="flex items-center gap-3">
+                                    <span className="line-through text-slate-500 font-bold">{translatePriority(change.originalData?.priority)}</span>
+                                    <ArrowRight className="w-3 select-none h-3 text-slate-500" />
+                                    <span className="text-amber-400 font-black uppercase">{translatePriority(change.proposedData?.priority)}</span>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* 3. Título */}
+                              {change.originalData?.title !== change.proposedData?.title && (
+                                <div className="p-3.5 rounded-2xl bg-black/30 border border-white/[0.03] space-y-2">
+                                  <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 block pb-1 font-bold">Título</span>
+                                  <div className="grid grid-cols-2 gap-3 text-[10px]">
+                                    <div className="p-2.5 rounded-xl bg-white/5 text-slate-400">
+                                      <span className="font-bold block text-slate-500 mb-1">Original:</span>
+                                      <span>{change.originalData?.title}</span>
+                                    </div>
+                                    <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-300">
+                                      <span className="font-bold block text-amber-400 mb-1">Proposto:</span>
+                                      <span className="font-black">{change.proposedData?.title}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* 4. Status */}
+                              {change.originalData?.status !== change.proposedData?.status && (
+                                <div className="p-3.5 rounded-2xl bg-black/30 border border-white/[0.03] flex items-center justify-between gap-3">
+                                  <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 font-bold">Status (Coluna)</span>
+                                  <div className="flex items-center gap-3">
+                                    <span className="line-through text-slate-500 font-bold">{translateStatus(change.originalData?.status)}</span>
+                                    <ArrowRight className="w-3 h-3 text-slate-500" />
+                                    <span className="text-amber-400 font-black uppercase">{translateStatus(change.proposedData?.status)}</span>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* 5. Data */}
+                              {change.originalData?.deadline !== change.proposedData?.deadline && (
+                                <div className="p-3.5 rounded-2xl bg-black/30 border border-white/[0.03] flex items-center justify-between gap-3">
+                                  <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 font-bold">Prazo (Data)</span>
+                                  <div className="flex items-center gap-3">
+                                    <span className="line-through text-slate-500 font-bold">
+                                      {change.originalData?.deadline ? format(parseISO(change.originalData?.deadline), "dd/MM/yyyy") : 'Sem prazo'}
+                                    </span>
+                                    <ArrowRight className="w-3 h-3 text-slate-500" />
+                                    <span className="text-amber-400 font-black">
+                                      {change.proposedData?.deadline ? format(parseISO(change.proposedData?.deadline), "dd/MM/yyyy") : 'Sem prazo'}
+                                    </span>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* 6. Descrição */}
+                              {change.originalData?.description !== change.proposedData?.description && (
+                                <div className="p-3.5 rounded-2xl bg-black/30 border border-white/[0.03] space-y-2">
+                                  <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 block pb-1 font-bold">Descrição</span>
+                                  <div className="grid grid-cols-2 gap-3 text-[10px]">
+                                    <div className="p-2.5 rounded-xl bg-red-500/10 text-slate-400 max-h-[100px] overflow-y-auto custom-scrollbar">
+                                      <span className="font-bold block text-red-400 mb-1">Original:</span>
+                                      <span className="italic">{change.originalData?.description || "Sem descrição"}</span>
+                                    </div>
+                                    <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-300 max-h-[100px] overflow-y-auto custom-scrollbar">
+                                      <span className="font-bold block text-emerald-400 mb-1">Proposto:</span>
+                                      <span className="italic font-bold">{change.proposedData?.description || "Sem descrição"}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {change.type === 'delete' && (
+                            <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold leading-relaxed text-center">
+                              ⚠️ Esta solicitação é para EXCLUIR permanentemente esta atividade.
+                            </div>
+                          )}
+
+                          {change.type === 'create' && (
+                            <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs font-bold leading-relaxed text-center">
+                              ✨ Esta solicitação é para CRIAR esta nova atividade com as informações propostas.
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Approved & Reject Actions for this Change */}
+                        <div className="flex gap-3 pt-2 justify-end">
+                          <Button 
+                            type="button"
+                            onClick={() => handleRejectPendingChange(change)}
+                            disabled={loading}
+                            className="bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-xl text-[10px] font-black uppercase tracking-widest px-4 h-9 border-none transition-all flex items-center gap-1 shrink-0"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                            Rejeitar
+                          </Button>
+                          <Button 
+                            type="button"
+                            onClick={() => handleApprovePendingChange(change)}
+                            disabled={loading}
+                            className="bg-emerald-500 hover:bg-emerald-600 text-black rounded-xl text-[10px] font-black uppercase tracking-widest px-4 h-9 border-none transition-all flex items-center gap-1 shadow-lg shadow-emerald-500/10 shrink-0 select-none"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                            Aprovar
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </div>
+          
+          <div className="p-8 pt-4 border-t border-white/5 bg-black/20 text-right shrink-0">
+            <Button 
+              type="button"
+              onClick={() => setIsValidationDialogOpen(false)}
+              className="px-6 rounded-xl h-10 bg-white/5 hover:bg-white/10 text-white font-black uppercase text-[10px] tracking-widest transition-all"
+            >
+              Fechar
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
       <Dialog open={!!timelineDetail} onOpenChange={(open) => !open && setTimelineDetail(null)}>

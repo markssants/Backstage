@@ -112,13 +112,13 @@ export interface FirestoreErrorInfo {
 
 export interface PendingChange {
   id: string;
-  type: 'create' | 'update' | 'status' | 'delete';
+  type: 'create' | 'update' | 'status' | 'delete' | 'revert';
   proposedData: any;
   originalData: any;
   targetId: string;
   title: string;
   contractorName: string;
   contractorEmail: string;
-  status: 'pending' | 'approved' | 'rejected';
+  status: 'pending' | 'approved' | 'rejected' | 'reverted';
   createdAt: any;
 }

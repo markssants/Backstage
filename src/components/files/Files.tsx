@@ -36,21 +36,21 @@ export function Files({ event }: FilesProps) {
         </div>
       </div>
 
-      <Card className="rounded-[2.5rem] border-white/5 bg-slate-900 shadow-2xl overflow-hidden border min-h-[800px] flex flex-col">
+      <Card className="rounded-[2.5rem] border-white/5 bg-slate-900 shadow-2xl overflow-hidden border min-h-[550px] flex flex-col">
         <CardContent className="p-0 flex-grow h-full bg-slate-900">
           {embedUrl ? (
-            <div className="w-full h-full min-h-[800px] relative overflow-hidden rounded-[2.5rem]">
+            <div className="w-full h-full min-h-[550px] relative overflow-hidden rounded-[2.5rem]">
               <iframe
                 src={embedUrl}
                 width="100%"
-                height="800px"
+                height="550px"
                 className="rounded-[2.5rem] border-none invert hue-rotate-180 contrast-125"
                 allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
                 title="Google Drive"
               />
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center h-[800px] text-center space-y-6 p-12">
+            <div className="flex flex-col items-center justify-center h-[550px] text-center space-y-6 p-12">
               <div className="w-20 h-20 bg-blue-500/10 rounded-3xl flex items-center justify-center border border-blue-500/20">
                 <ShieldAlert className="w-10 h-10 text-blue-500/50" />
               </div>
