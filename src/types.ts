@@ -45,6 +45,16 @@ export interface ArtTask {
   createdAt: any;
 }
 
+export interface DjAgency {
+  name: string;
+  link: string;
+}
+
+export interface DjLabel {
+  name: string;
+  link: string;
+}
+
 export interface DjAsset {
   id: string;
   eventId: string;
@@ -55,8 +65,10 @@ export interface DjAsset {
   musicDuration?: string;
   artDeadline?: string;
   hasMandatoryLogo?: boolean;
-  agencyInfo?: string;
-  labelInfo?: string;
+  agencyInfo?: string; // fallback for legacy data
+  labelInfo?: string;  // fallback for legacy data
+  agencies?: DjAgency[];
+  labels?: DjLabel[];
   flyerPhoto?: string;
   animationVideo?: string;
   priority?: 'low' | 'medium' | 'urgent';

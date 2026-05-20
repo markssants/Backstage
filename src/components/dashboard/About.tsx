@@ -45,7 +45,7 @@ export function About() {
           BACK <span className="text-pink-500 text-shadow-glow">STAGE</span>
         </h1>
         <p className="text-slate-500 font-bold uppercase tracking-[0.3em] text-xs">
-          Sistema de Gerenciamento de Produção Audiovisual • v2.4.0
+          Sistema de Gerenciamento de Produção Audiovisual • v2.5.0
         </p>
       </header>
 

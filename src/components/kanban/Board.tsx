@@ -1942,6 +1942,126 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
                                     Solicitação de criação para este novo card.
                                   </div>
                                 )}
+                                {activeChange.type === 'revert' && (
+                                  <div className="col-span-2 space-y-3">
+                                    <div className="text-amber-400 font-black italic text-[11px] border-b border-white/5 pb-1 flex items-center gap-1.5 uppercase tracking-wide">
+                                      <RotateCcw className="w-3.5 h-3.5 animate-spin" style={{ animationDuration: '3s' }} />
+                                      Solicitação de Reversão de {
+                                        activeChange.proposedData?.changeType === 'create' ? "Criação" :
+                                        activeChange.proposedData?.changeType === 'update' ? "Editição de Dados" :
+                                        activeChange.proposedData?.changeType === 'status' ? "Movimentação" :
+                                        activeChange.proposedData?.changeType === 'delete' ? "Exclusão" : "Alteração"
+                                      }
+                                    </div>
+
+                                    {activeChange.proposedData?.changeType === 'create' && (
+                                      <div className="text-rose-400 font-bold italic">
+                                        Reverter a criação removerá e excluirá permanentemente este card do board.
+                                      </div>
+                                    )}
+
+                                    {activeChange.proposedData?.changeType === 'delete' && (
+                                      <div className="text-emerald-400 font-bold italic">
+                                        Reverter a exclusão restaurará permanentemente este card de volta ao board.
+                                      </div>
+                                    )}
+
+                                    {activeChange.proposedData?.changeType === 'status' && activeChange.proposedData?.restoreData && (
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 mr-2">Reverter Status:</span>
+                                        <span className="line-through text-slate-500">
+                                          {translateStatus(activeChange.originalData?.status || selectedArt.status)}
+                                        </span>
+                                        <ArrowRight className="w-3 h-3 text-slate-500" />
+                                        <span className="text-emerald-400 font-bold">
+                                          {translateStatus(activeChange.proposedData.restoreData.status)}
+                                        </span>
+                                      </div>
+                                    )}
+
+                                    {activeChange.proposedData?.changeType === 'update' && activeChange.proposedData?.restoreData && (
+                                      <div className="space-y-2">
+                                        {/* Categoria */}
+                                        {activeChange.originalData?.category !== activeChange.proposedData.restoreData.category && (
+                                          <div className="flex items-center gap-2">
+                                            <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 mr-2">Reverter Categoria:</span>
+                                            <span className="line-through text-slate-500">{translateCategory(activeChange.originalData?.category)}</span>
+                                            <ArrowRight className="w-3 h-3 text-slate-500" />
+                                            <span className="text-emerald-400 font-bold">{translateCategory(activeChange.proposedData.restoreData.category)}</span>
+                                          </div>
+                                        )}
+
+                                        {/* Prioridade */}
+                                        {activeChange.originalData?.priority !== activeChange.proposedData.restoreData.priority && (
+                                          <div className="flex items-center gap-2">
+                                            <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 mr-2">Reverter Prioridade:</span>
+                                            <span className="line-through text-slate-500">{translatePriority(activeChange.originalData?.priority)}</span>
+                                            <ArrowRight className="w-3 h-3 text-slate-500" />
+                                            <span className="text-emerald-400 font-bold">{translatePriority(activeChange.proposedData.restoreData.priority)}</span>
+                                          </div>
+                                        )}
+
+                                        {/* Título */}
+                                        {activeChange.originalData?.title !== activeChange.proposedData.restoreData.title && (
+                                          <div className="space-y-1">
+                                            <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Reverter Título para:</span>
+                                            <div className="grid grid-cols-2 gap-3 text-[10px]">
+                                              <div className="p-2 rounded-xl bg-white/5 border border-white/5 text-slate-500">
+                                                <span className="font-bold block text-slate-600 mb-0.5">Atual:</span>
+                                                <span>{activeChange.originalData?.title}</span>
+                                              </div>
+                                              <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300">
+                                                <span className="font-bold block text-emerald-400 mb-0.5">Restaurado:</span>
+                                                <span>{activeChange.proposedData.restoreData.title}</span>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        )}
+
+                                        {/* Status */}
+                                        {activeChange.originalData?.status !== activeChange.proposedData.restoreData.status && (
+                                          <div className="flex items-center gap-2">
+                                            <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 mr-2">Reverter Status:</span>
+                                            <span className="line-through text-slate-500">{translateStatus(activeChange.originalData?.status)}</span>
+                                            <ArrowRight className="w-3 h-3 text-slate-500" />
+                                            <span className="text-emerald-400 font-bold">{translateStatus(activeChange.proposedData.restoreData.status)}</span>
+                                          </div>
+                                        )}
+
+                                        {/* Prazo */}
+                                        {activeChange.originalData?.deadline !== activeChange.proposedData.restoreData.deadline && (
+                                          <div className="flex items-center gap-2">
+                                            <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 mr-4">Reverter Prazo:</span>
+                                            <span className="line-through text-slate-500">
+                                              {activeChange.originalData?.deadline ? format(parseISO(activeChange.originalData.deadline), "dd/MM/yyyy") : 'Sem prazo'}
+                                            </span>
+                                            <ArrowRight className="w-3 h-3 text-slate-500" />
+                                            <span className="text-emerald-400 font-bold">
+                                              {activeChange.proposedData.restoreData.deadline ? format(parseISO(activeChange.proposedData.restoreData.deadline), "dd/MM/yyyy") : 'Sem prazo'}
+                                            </span>
+                                          </div>
+                                        )}
+
+                                        {/* Descrição */}
+                                        {activeChange.originalData?.description !== activeChange.proposedData.restoreData.description && (
+                                          <div className="space-y-1">
+                                            <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Reverter Descrição para:</span>
+                                            <div className="grid grid-cols-2 gap-3 text-[10px]">
+                                              <div className="p-2 rounded-xl bg-red-500/10 border border-red-500/20 text-slate-400 max-h-[60px] overflow-y-auto custom-scrollbar">
+                                                <span className="font-bold block text-red-400 mb-0.5">Atual:</span>
+                                                <span className="italic">{activeChange.originalData?.description || "Sem descrição"}</span>
+                                              </div>
+                                              <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 max-h-[60px] overflow-y-auto custom-scrollbar">
+                                                <span className="font-bold block text-emerald-400 mb-0.5">Restaurado:</span>
+                                                <span className="italic">{activeChange.proposedData.restoreData.description || "Sem descrição"}</span>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
                               </div>
                             </div>
                           );
@@ -2396,6 +2516,135 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
                           {change.type === 'create' && (
                             <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs font-bold leading-relaxed text-center">
                               ✨ Esta solicitação é para CRIAR esta nova atividade com as informações propostas.
+                            </div>
+                          )}
+
+                          {change.type === 'revert' && (
+                            <div className="space-y-3.5">
+                              <div className="text-amber-400 font-extrabold italic text-sm pb-1 flex items-center gap-1.5 uppercase tracking-wide">
+                                <RotateCcw className="w-4 h-4 animate-spin" style={{ animationDuration: '3s' }} />
+                                Reversão Solicitada de {
+                                  change.proposedData?.changeType === 'create' ? "Criação" :
+                                  change.proposedData?.changeType === 'update' ? "Edição de Dados" :
+                                  change.proposedData?.changeType === 'status' ? "Movimentação" :
+                                  change.proposedData?.changeType === 'delete' ? "Exclusão" : "Alteração"
+                                }
+                              </div>
+
+                              {change.proposedData?.changeType === 'create' && (
+                                <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold leading-relaxed">
+                                  Reverter esta criação removerá e excluirá permanentemente este card do board.
+                                </div>
+                              )}
+
+                              {change.proposedData?.changeType === 'delete' && (
+                                <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs font-bold leading-relaxed">
+                                  Reverter esta exclusão restaurará permanentemente este card de volta ao board.
+                                </div>
+                              )}
+
+                              {change.proposedData?.changeType === 'status' && change.proposedData?.restoreData && (
+                                <div className="p-3.5 rounded-2xl bg-black/30 border border-white/[0.03] flex items-center gap-2 text-xs">
+                                  <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 mr-2">Reverter Status:</span>
+                                  <span className="line-through text-slate-500">
+                                    {translateStatus(change.originalData?.status || selectedArt?.status)}
+                                  </span>
+                                  <ArrowRight className="w-3 h-3 text-slate-400" />
+                                  <span className="text-emerald-400 font-bold">
+                                    {translateStatus(change.proposedData.restoreData.status)}
+                                  </span>
+                                </div>
+                              )}
+
+                              {change.proposedData?.changeType === 'update' && change.proposedData?.restoreData && (
+                                <div className="space-y-3 text-[11px]">
+                                  {/* Categoria */}
+                                  {change.originalData?.category !== change.proposedData.restoreData.category && (
+                                    <div className="p-3 rounded-2xl bg-black/30 border border-white/[0.03] flex items-center justify-between gap-3">
+                                      <span className="text-[9.5px] font-black uppercase tracking-wider text-slate-400">Reverter Categoria</span>
+                                      <div className="flex items-center gap-2">
+                                        <span className="line-through text-slate-500">{translateCategory(change.originalData?.category)}</span>
+                                        <ArrowRight className="w-3 h-3 text-slate-400" />
+                                        <span className="text-emerald-400 font-bold">{translateCategory(change.proposedData.restoreData.category)}</span>
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Prioridade */}
+                                  {change.originalData?.priority !== change.proposedData.restoreData.priority && (
+                                    <div className="p-3 rounded-2xl bg-black/30 border border-white/[0.03] flex items-center justify-between gap-3">
+                                      <span className="text-[9.5px] font-black uppercase tracking-wider text-slate-400">Reverter Prioridade</span>
+                                      <div className="flex items-center gap-2">
+                                        <span className="line-through text-slate-500">{translatePriority(change.originalData?.priority)}</span>
+                                        <ArrowRight className="w-3 h-3 text-slate-400" />
+                                        <span className="text-emerald-400 font-bold">{translatePriority(change.proposedData.restoreData.priority)}</span>
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Título */}
+                                  {change.originalData?.title !== change.proposedData.restoreData.title && (
+                                    <div className="p-3 rounded-2xl bg-black/30 border border-white/[0.03] space-y-2">
+                                      <span className="text-[9.5px] font-black uppercase tracking-wider text-slate-400 block pb-1">Reverter Título</span>
+                                      <div className="grid grid-cols-2 gap-3 text-[10.5px]">
+                                        <div className="p-2 rounded-xl bg-white/5 border border-white/5 text-slate-400">
+                                          <span className="font-bold block text-slate-500 mb-0.5">Atual:</span>
+                                          <span>{change.originalData?.title}</span>
+                                        </div>
+                                        <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300">
+                                          <span className="font-bold block text-emerald-400 mb-0.5">Restaurado:</span>
+                                          <span>{change.proposedData.restoreData.title}</span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Status */}
+                                  {change.originalData?.status !== change.proposedData.restoreData.status && (
+                                    <div className="p-3 rounded-2xl bg-black/30 border border-white/[0.03] flex items-center justify-between gap-3">
+                                      <span className="text-[9.5px] font-black uppercase tracking-wider text-slate-400">Reverter Status (Coluna)</span>
+                                      <div className="flex items-center gap-2">
+                                        <span className="line-through text-slate-500">{translateStatus(change.originalData?.status)}</span>
+                                        <ArrowRight className="w-3 h-3 text-slate-400" />
+                                        <span className="text-emerald-400 font-bold">{translateStatus(change.proposedData.restoreData.status)}</span>
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Prazo */}
+                                  {change.originalData?.deadline !== change.proposedData.restoreData.deadline && (
+                                    <div className="p-3 rounded-2xl bg-black/30 border border-white/[0.03] flex items-center justify-between gap-3">
+                                      <span className="text-[9.5px] font-black uppercase tracking-wider text-slate-400">Reverter Prazo</span>
+                                      <div className="flex items-center gap-2">
+                                        <span className="line-through text-slate-500">
+                                          {change.originalData?.deadline ? format(parseISO(change.originalData.deadline), "dd/MM/yyyy") : 'Sem prazo'}
+                                        </span>
+                                        <ArrowRight className="w-3 h-3 text-slate-400" />
+                                        <span className="text-emerald-400 font-bold">
+                                          {change.proposedData.restoreData.deadline ? format(parseISO(change.proposedData.restoreData.deadline), "dd/MM/yyyy") : 'Sem prazo'}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Descrição */}
+                                  {change.originalData?.description !== change.proposedData.restoreData.description && (
+                                    <div className="p-3 rounded-2xl bg-black/30 border border-white/[0.03] space-y-2">
+                                      <span className="text-[9.5px] font-black uppercase tracking-wider text-slate-400 block pb-1">Reverter Descrição</span>
+                                      <div className="grid grid-cols-2 gap-3 text-[10.5px]">
+                                        <div className="p-2 rounded-xl bg-red-500/10 border border-red-500/20 text-slate-400 max-h-[85px] overflow-y-auto custom-scrollbar">
+                                          <span className="font-bold block text-red-400 mb-0.5">Atual:</span>
+                                          <span className="italic">{change.originalData?.description || "Sem descrição"}</span>
+                                        </div>
+                                        <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 max-h-[85px] overflow-y-auto custom-scrollbar">
+                                          <span className="font-bold block text-emerald-400 mb-0.5">Restaurado:</span>
+                                          <span className="italic">{change.proposedData.restoreData.description || "Sem descrição"}</span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>
