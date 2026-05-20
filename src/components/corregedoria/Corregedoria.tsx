@@ -381,10 +381,10 @@ export function Corregedoria({ event, profile }: { event: EventProject, profile:
         <div className="space-y-3 text-center md:text-left relative z-10">
           <h4 className="text-2xl font-black tracking-tight flex items-center justify-center md:justify-start">
             <ShieldCheck className="mr-3 w-7 h-7 text-emerald-500" />
-            Segurança Marks Eventos
+            Segurança Backstage
           </h4>
           <p className="text-slate-400 text-sm max-w-lg leading-relaxed font-medium italic">
-            Todos os documentos são armazenados em links externos seguros. Marks Eventos não hospeda arquivos físicos, garantindo que você tenha controle total sobre seu armazenamento.
+            Todos os documentos são armazenados em links externos seguros. O Backstage não hospeda arquivos físicos, garantindo que você tenha controle total sobre seu armazenamento.
           </p>
         </div>
         <div className="flex -space-x-4 relative z-10">

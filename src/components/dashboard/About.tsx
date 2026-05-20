@@ -42,10 +42,10 @@ export function About() {
           <Code2 className="w-12 h-12 text-white" />
         </motion.div>
         <h1 className="text-5xl font-black text-white tracking-tighter italic">
-          MARKS <span className="text-pink-500 text-shadow-glow">EVENTOS</span>
+          BACK <span className="text-pink-500 text-shadow-glow">STAGE</span>
         </h1>
         <p className="text-slate-500 font-bold uppercase tracking-[0.3em] text-xs">
-          Sistema de Gerenciamento de Produção Audiovisual • v1.5.0
+          Sistema de Gerenciamento de Produção Audiovisual • v2.0.0
         </p>
       </header>
 
@@ -102,7 +102,7 @@ export function About() {
       </Card>
 
       <footer className="text-center text-[10px] text-slate-600 font-black uppercase tracking-[0.2em] pt-12">
-        © 2024 MARKS EVENTOS • TODOS OS DIREITOS RESERVADOS
+        © 2024 BACKSTAGE • TODOS OS DIREITOS RESERVADOS
       </footer>
     </div>
   );

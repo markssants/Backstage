@@ -130,7 +130,7 @@ export function ProfileManagement({ profile }: ProfileManagementProps) {
         <h4 className="text-sm font-black text-indigo-400 uppercase tracking-widest">Segurança & Privacidade</h4>
         <p className="text-xs text-slate-400 leading-relaxed font-bold italic">
           Suas informações são armazenadas de forma segura em nossos servidores. 
-          As alterações feitas aqui refletem em como outros membros da Marks Eventos veem seu perfil nos projetos e tarefas.
+          As alterações feitas aqui refletem em como outros membros do Backstage veem seu perfil nos projetos e tarefas.
         </p>
       </motion.div>
     </div>

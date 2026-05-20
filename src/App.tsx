@@ -145,7 +145,7 @@ function Landing({ handleLogin, loginLoading }: { handleLogin: () => void, login
             
             <div className="space-y-4">
               <h1 className="text-6xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-white via-pink-200 to-slate-400 font-outfit">
-                MARKS EVENTOS
+                BACKSTAGE
               </h1>
               <p className="text-slate-400 text-lg leading-relaxed">
                 Gestão de eventos e artes em um só lugar. Organize presskits, cronogramas e pagamentos.
@@ -212,7 +212,7 @@ function Landing({ handleLogin, loginLoading }: { handleLogin: () => void, login
                 <Button
                   variant="link"
                   className="text-slate-500 hover:text-pink-400 text-xs font-bold uppercase tracking-widest"
-                  onClick={() => window.open('https://wa.me/5519971087116?text=Oi%2C%20preciso%20da%20senha%20pra%20entrar%20no%20gerenciador%20de%20Eventos%20Marks', '_blank')}
+                  onClick={() => window.open('https://wa.me/5519971087116?text=Oi%2C%20preciso%20da%20senha%20pra%20entrar%20no%20gerenciador%20do%20Backstage', '_blank')}
                 >
                   Não tem a senha? Solicitar acesso
                 </Button>
@@ -222,7 +222,7 @@ function Landing({ handleLogin, loginLoading }: { handleLogin: () => void, login
         )}
       </AnimatePresence>
       <div className="absolute bottom-8 text-[10px] font-black text-white tracking-[0.3em] uppercase opacity-40">
-        v1.7
+        v2.0
       </div>
     </div>
   );

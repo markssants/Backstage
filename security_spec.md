@@ -1,4 +1,4 @@
-# Security Specification for Marks Eventos
+# Security Specification for Backstage
 
 ## Data Invariants
 1. A user can only see their own profile.

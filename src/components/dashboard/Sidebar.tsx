@@ -62,7 +62,7 @@ export function Sidebar({ activeView, setActiveView, profile, onLogout }: Sideba
                   activeView === 'about' ? "text-pink-500" : "group-hover/logo:text-pink-400"
                 )}
               >
-                MarksEventos
+                Backstage
               </motion.span>
             )}
           </AnimatePresence>
@@ -167,7 +167,7 @@ export function Sidebar({ activeView, setActiveView, profile, onLogout }: Sideba
                   className="flex items-center justify-between flex-1 min-w-0"
                 >
                   <span className="truncate">Sair</span>
-                  <span className="text-[9px] text-slate-400 font-black opacity-70 uppercase tracking-widest ml-2 shrink-0">v1.5</span>
+                  <span className="text-[9px] text-slate-400 font-black opacity-70 uppercase tracking-widest ml-2 shrink-0">v2.0</span>
                 </motion.div>
               )}
             </AnimatePresence>
