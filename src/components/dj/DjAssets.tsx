@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, Music, ExternalLink, Clock, Trash2, Loader2, Disc, Calendar, ShieldAlert, BadgeCheck, Pencil } from "lucide-react";
+import { Plus, Music, ExternalLink, Clock, Trash2, Loader2, Disc, Calendar, ShieldAlert, BadgeCheck, Pencil, Film, Image, Sparkles } from "lucide-react";
 import { EventProject, UserProfile, DjAsset, ArtTask } from "../../types";
 import { collection, query, onSnapshot, addDoc, serverTimestamp, deleteDoc, doc, getDocs, limit, orderBy, updateDoc } from "firebase/firestore";
 import { db, handleFirestoreError } from "../../firebase";
@@ -289,165 +289,226 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
               Adicionar DJ
             </Button>
           } />
-          <DialogContent className="rounded-3xl sm:max-w-[500px] glass border-white/10 text-slate-100">
+          <DialogContent className="rounded-3xl sm:max-w-[850px] w-[95vw] glass border-white/10 text-slate-100 p-6 md:p-8">
             <DialogHeader>
-              <DialogTitle className="text-2xl font-black text-white tracking-tight">
-                {editingId ? 'Editar Informações do DJ' : 'Informações do DJ'}
+              <DialogTitle className="text-2xl font-black text-white tracking-tight flex items-center gap-2">
+                <Disc className="w-6 h-6 text-purple-400 animate-spin" style={{ animationDuration: '6s' }} />
+                {editingId ? 'Editar Informações do DJ' : 'Cadastrar Novo DJ / Atração'}
               </DialogTitle>
             </DialogHeader>
-            <div className="grid gap-6 py-6 max-h-[70vh] overflow-y-auto px-1 pr-3">
-              <div className="space-y-2">
-                <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400">Nome do DJ / Atração</Label>
-                <Input value={newAsset.name} onChange={e => setNewAsset({...newAsset, name: e.target.value})} className="rounded-2xl bg-white/5 border-white/10 text-white h-12" />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400">Link do Presskit (Drive/Dropbox)</Label>
-                <Input value={newAsset.presskitUrl} onChange={e => setNewAsset({...newAsset, presskitUrl: e.target.value})} className="rounded-2xl bg-white/5 border-white/10 text-white h-12" />
-              </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-6 max-h-[70vh] overflow-y-auto px-1 pr-3 scrollbar-thin">
               
-              <div className="grid grid-cols-3 gap-4">
-                <div className="col-span-2 space-y-2">
-                  <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400">Musica (Nome / Link)</Label>
-                  <Input value={newAsset.musicName} onChange={e => setNewAsset({...newAsset, musicName: e.target.value})} className="rounded-2xl bg-white/5 border-white/10 text-white h-12" />
+              {/* Coluna 1: Identificação, Presskit e Playlist */}
+              <div className="space-y-6">
+                {/* Bloco 1: Identificação */}
+                <div className="bg-white/[0.02] border border-white/5 rounded-3xl p-5 space-y-4">
+                  <div className="flex items-center gap-2 pb-2 border-b border-white/5">
+                    <Sparkles className="w-4 h-4 text-purple-400" />
+                    <span className="text-[10px] uppercase font-black tracking-widest text-slate-300">Identificação & Presskit</span>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400">Nome do DJ / Atração</Label>
+                    <Input value={newAsset.name} onChange={e => setNewAsset({...newAsset, name: e.target.value})} placeholder="Ex: DJ Alok" className="rounded-2xl bg-white/5 border-white/10 text-white h-12" />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400">Link do Presskit (Drive/Dropbox)</Label>
+                    <Input value={newAsset.presskitUrl} onChange={e => setNewAsset({...newAsset, presskitUrl: e.target.value})} placeholder="Link com fotos e release" className="rounded-2xl bg-white/5 border-white/10 text-white h-12" />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400">Status do Presskit</Label>
+                      <div className="flex gap-1 bg-white/5 p-1 rounded-2xl border border-white/10">
+                        {(['pending', 'completed'] as const).map((s) => (
+                          <button
+                            key={s}
+                            type="button"
+                            onClick={() => setNewAsset({...newAsset, presskitStatus: s})}
+                            className={cn(
+                              "flex-1 rounded-xl text-[9px] font-black uppercase tracking-widest h-9 transition-all cursor-pointer",
+                              newAsset.presskitStatus === s 
+                                ? "bg-purple-500/20 text-purple-400 border border-purple-500/30 shadow-inner"
+                                : "text-slate-500 hover:text-slate-300"
+                            )}
+                          >
+                            {s === 'pending' ? 'Pendente' : 'Recebido'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400">Prioridade da Arte</Label>
+                      <div className="flex gap-1 bg-white/5 p-1 rounded-2xl border border-white/10">
+                        {(['low', 'medium', 'urgent'] as const).map((p) => (
+                          <button
+                            key={p}
+                            type="button"
+                            onClick={() => setNewAsset({...newAsset, priority: p})}
+                            className={cn(
+                              "flex-1 rounded-xl text-[9px] font-black uppercase tracking-widest h-9 transition-all cursor-pointer",
+                              newAsset.priority === p 
+                                ? p === 'urgent' ? "bg-rose-500/20 text-rose-400 border-rose-500/30" :
+                                  p === 'medium' ? "bg-amber-500/20 text-amber-400 border-amber-500/30" :
+                                  "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                                : "text-slate-500 hover:text-slate-300"
+                            )}
+                          >
+                            {p === 'low' ? 'Baixa' : p === 'medium' ? 'Méd' : 'Urg'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400">Tempo / Minuto</Label>
-                  <Input value={newAsset.musicDuration} onChange={e => setNewAsset({...newAsset, musicDuration: e.target.value})} placeholder="Ex: 01:20" className="rounded-2xl bg-white/5 border-white/10 text-white h-12" />
+
+                {/* Bloco 2: Trilha / Playlist */}
+                <div className="bg-white/[0.02] border border-white/5 rounded-3xl p-5 space-y-4">
+                  <div className="flex items-center gap-2 pb-2 border-b border-white/5">
+                    <Music className="w-4 h-4 text-pink-400" />
+                    <span className="text-[10px] uppercase font-black tracking-widest text-slate-300">Playlist & Trilha de Entrada</span>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400">Nome da Música</Label>
+                    <Input value={newAsset.musicName || ''} onChange={e => setNewAsset({...newAsset, musicName: e.target.value})} placeholder="Ex: Hear Me Now" className="rounded-2xl bg-white/5 border-white/10 text-white h-12" />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400">Link da Música</Label>
+                      <Input value={newAsset.musicUrl || ''} onChange={e => setNewAsset({...newAsset, musicUrl: e.target.value})} placeholder="Ex: Link do Spotify/Youtube" className="rounded-2xl bg-white/5 border-white/10 text-white h-12" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400">Duração / Minutos de Corte</Label>
+                      <Input value={newAsset.musicDuration || ''} onChange={e => setNewAsset({...newAsset, musicDuration: e.target.value})} placeholder="Ex: 01:20" className="rounded-2xl bg-white/5 border-white/10 text-white h-12" />
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400">Foto para o Flyer (Nome do arquivo ou Link)</Label>
-                <Input value={newAsset.flyerPhoto} onChange={e => setNewAsset({...newAsset, flyerPhoto: e.target.value})} placeholder="Ex: dj_nome_promo.jpg ou link da foto" className="rounded-2xl bg-white/5 border-white/10 text-white h-12" />
-              </div>
+              {/* Coluna 2: Material Visual, Logos e Prazos */}
+              <div className="space-y-6">
+                {/* Bloco 3: Material para Designer */}
+                <div className="bg-white/[0.02] border border-white/5 rounded-3xl p-5 space-y-4">
+                  <div className="flex items-center gap-2 pb-2 border-b border-white/5">
+                    <Image className="w-4 h-4 text-emerald-400" />
+                    <span className="text-[10px] uppercase font-black tracking-widest text-slate-300">Material Visual para o Designer</span>
+                  </div>
 
-              <div className="space-y-2">
-                <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400">Video para a animação (Nome do arquivo ou Link)</Label>
-                <Input value={newAsset.animationVideo} onChange={e => setNewAsset({...newAsset, animationVideo: e.target.value})} placeholder="Ex: dj_show_vibe.mp4 ou link do video" className="rounded-2xl bg-white/5 border-white/10 text-white h-12" />
-              </div>
+                  <div className="space-y-2">
+                    <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400">Foto para o Flyer (Arquivo ou Link)</Label>
+                    <Input value={newAsset.flyerPhoto || ''} onChange={e => setNewAsset({...newAsset, flyerPhoto: e.target.value})} placeholder="Ex: dj_promo.png ou link da foto" className="rounded-2xl bg-white/5 border-white/10 text-white h-12" />
+                  </div>
 
-              <div className="space-y-2">
-                <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400">Prioridade da Arte</Label>
-                <div className="grid grid-cols-3 gap-2">
-                  {(['low', 'medium', 'urgent'] as const).map((p) => (
-                    <Button
-                      key={p}
-                      type="button"
-                      variant="ghost"
-                      onClick={() => setNewAsset({...newAsset, priority: p})}
-                      className={cn(
-                        "rounded-xl border-white/10 text-[10px] font-black uppercase tracking-widest h-11",
-                        newAsset.priority === p 
-                          ? p === 'urgent' ? "bg-rose-500/20 text-rose-400 border-rose-500/30" :
-                            p === 'medium' ? "bg-amber-500/20 text-amber-400 border-amber-500/30" :
-                            "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
-                          : "bg-white/5 text-slate-400 hover:bg-white/10"
-                      )}
-                    >
-                      {p === 'low' ? 'Baixa' : p === 'medium' ? 'Média' : 'Urgente'}
-                    </Button>
-                  ))}
+                  <div className="space-y-2">
+                    <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400">Vídeo para Animação (Arquivo ou Link)</Label>
+                    <Input value={newAsset.animationVideo || ''} onChange={e => setNewAsset({...newAsset, animationVideo: e.target.value})} placeholder="Ex: painel_loop.mp4 ou link do drive" className="rounded-2xl bg-white/5 border-white/10 text-white h-12" />
+                  </div>
                 </div>
-              </div>
 
-              <div className="space-y-2">
-                <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400">Status do Presskit</Label>
-                <div className="grid grid-cols-2 gap-2">
-                  {(['pending', 'completed'] as const).map((s) => (
-                    <Button
-                      key={s}
-                      type="button"
-                      variant="ghost"
-                      onClick={() => setNewAsset({...newAsset, presskitStatus: s})}
-                      className={cn(
-                        "rounded-xl border-white/10 text-[10px] font-black uppercase tracking-widest h-11",
-                        newAsset.presskitStatus === s 
-                          ? "bg-purple-500/20 text-purple-400 border-purple-500/30"
-                          : "bg-white/5 text-slate-400 hover:bg-white/10"
-                      )}
-                    >
-                      {s === 'pending' ? 'Pendente' : 'Concluído'}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400">Prazo para Arte (Opcional)</Label>
-                
-                <div className="bg-blue-500/15 border border-blue-500/30 rounded-2xl p-4 flex items-start gap-4">
-                  <div className="bg-blue-400/20 p-2 rounded-xl shrink-0 mt-0.5">
+                {/* Bloco 4: Automação & Prazo */}
+                <div className="bg-white/[0.02] border border-white/5 rounded-3xl p-5 space-y-4">
+                  <div className="flex items-center gap-2 pb-2 border-b border-white/5">
                     <Calendar className="w-4 h-4 text-blue-400" />
+                    <span className="text-[10px] uppercase font-black tracking-widest text-slate-300">Prazo de Entrega & Automação</span>
                   </div>
-                  <div className="space-y-1">
-                    <p className="text-[11px] text-blue-100 font-bold uppercase tracking-tight leading-tight">
-                      Automação de Design
-                    </p>
-                    <p className="text-xs text-blue-200/70 font-medium leading-relaxed italic">
-                      Ao definir uma data abaixo, o sistema criará automaticamente uma tarefa no quadro de artes para o designer iniciar a criação do flyer.
-                    </p>
+
+                  <div className="space-y-2">
+                    <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400">Prazo Limite para Arte (Opcional)</Label>
+                    <Input 
+                      type="date"
+                      value={newAsset.artDeadline || ''} 
+                      onChange={e => setNewAsset({...newAsset, artDeadline: e.target.value})} 
+                      className="rounded-2xl bg-white/5 border-white/10 text-white h-12 [color-scheme:dark] px-5 font-bold" 
+                    />
                   </div>
-                </div>
 
-                <div className="relative">
-                  <Input 
-                    type="date"
-                    value={newAsset.artDeadline} 
-                    onChange={e => setNewAsset({...newAsset, artDeadline: e.target.value})} 
-                    className="rounded-2xl bg-white/5 border-white/10 text-white h-12 [color-scheme:dark] px-5 font-bold" 
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-4 pt-2 border-t border-white/5 mt-2">
-                <div className="flex items-center space-x-2">
-                  <Checkbox 
-                    id="mandatory-logo" 
-                    checked={newAsset.hasMandatoryLogo}
-                    onCheckedChange={(checked) => setNewAsset({ ...newAsset, hasMandatoryLogo: checked === true })}
-                  />
-                  <label 
-                    htmlFor="mandatory-logo"
-                    className="text-[10px] uppercase font-black tracking-[0.1em] text-slate-300 cursor-pointer select-none"
-                  >
-                    Logo Obrigatória (Agência / Gravadora)
-                  </label>
-                </div>
-
-                <AnimatePresence>
-                  {newAsset.hasMandatoryLogo && (
-                    <motion.div 
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: 'auto' }}
-                      exit={{ opacity: 0, height: 0 }}
-                      className="space-y-4 bg-white/5 p-4 rounded-2xl border border-white/5 overflow-hidden"
-                    >
-                      <div className="space-y-2">
-                        <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400">Agencia (Nome / Link do Logo)</Label>
-                        <Input 
-                          value={newAsset.agencyInfo} 
-                          onChange={e => setNewAsset({...newAsset, agencyInfo: e.target.value})} 
-                          className="rounded-2xl bg-white/5 border-white/10 text-white h-12"
-                          placeholder="Ex: Agency Name - link.com/logo.png"
-                        />
+                  {newAsset.artDeadline && (
+                    <div className="bg-blue-500/10 border border-blue-500/20 rounded-2xl p-4 flex items-start gap-3">
+                      <div className="bg-blue-500/20 p-2 rounded-xl shrink-0 mt-0.5 animate-pulse">
+                        <Calendar className="w-4 h-4 text-blue-400" />
                       </div>
-                      <div className="space-y-2">
-                        <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400">Gravadora (Nome / Link do Logo)</Label>
-                        <Input 
-                          value={newAsset.labelInfo} 
-                          onChange={e => setNewAsset({...newAsset, labelInfo: e.target.value})} 
-                          className="rounded-2xl bg-white/5 border-white/10 text-white h-12"
-                          placeholder="Ex: Record Label - link.com/logo.png"
-                        />
+                      <div className="space-y-1">
+                        <p className="text-[10px] text-blue-300 font-extrabold uppercase tracking-widest">
+                          Arte Criada Automaticamente
+                        </p>
+                        <p className="text-[11px] text-blue-200/70 font-medium leading-relaxed italic">
+                          O sistema agendará no Kanban do evento para iniciar a criação do flyer.
+                        </p>
                       </div>
-                    </motion.div>
+                    </div>
                   )}
-                </AnimatePresence>
+                </div>
+
+                {/* Bloco 5: Marcas & Logos */}
+                <div className="bg-white/[0.02] border border-white/5 rounded-3xl p-5 space-y-4">
+                  <div className="flex items-center justify-between pb-2 border-b border-white/5">
+                    <div className="flex items-center gap-2">
+                      <ShieldAlert className="w-4 h-4 text-amber-400" />
+                      <span className="text-[10px] uppercase font-black tracking-widest text-slate-300">Marcas & Logos Mandatórios</span>
+                    </div>
+                    <Checkbox 
+                      id="mandatory-logo" 
+                      checked={newAsset.hasMandatoryLogo}
+                      onCheckedChange={(checked) => setNewAsset({ ...newAsset, hasMandatoryLogo: checked === true })}
+                      className="border-slate-500 data-[state=checked]:bg-amber-500 data-[state=checked]:border-amber-500"
+                    />
+                  </div>
+
+                  <AnimatePresence initial={false}>
+                    {newAsset.hasMandatoryLogo ? (
+                      <motion.div 
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="space-y-4 overflow-hidden"
+                      >
+                        <div className="space-y-2">
+                          <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400">Agência Associada (Nome e Link Logo)</Label>
+                          <Input 
+                            value={newAsset.agencyInfo || ''} 
+                            onChange={e => setNewAsset({...newAsset, agencyInfo: e.target.value})} 
+                            className="rounded-2xl bg-white/5 border-white/10 text-white h-12"
+                            placeholder="Ex: Agency Plus - link.com/logo.png"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400">Gravadora Associada (Nome e Link Logo)</Label>
+                          <Input 
+                            value={newAsset.labelInfo || ''} 
+                            onChange={e => setNewAsset({...newAsset, labelInfo: e.target.value})} 
+                            className="rounded-2xl bg-white/5 border-white/10 text-white h-12"
+                            placeholder="Ex: Spinnin Records - link.com/logo.png"
+                          />
+                        </div>
+                      </motion.div>
+                    ) : (
+                      <p className="text-xs text-slate-500 italic">Nenhum logo de agência ou gravadora obrigatória ativado.</p>
+                    )}
+                  </AnimatePresence>
+                </div>
               </div>
+
             </div>
-            <DialogFooter>
-              <Button onClick={handleSave} disabled={loading} className="w-full bg-pink-500 hover:bg-pink-600 rounded-2xl h-14 font-black shadow-[0_0_20px_rgba(236,72,153,0.3)]">
-                {loading ? <Loader2 className="animate-spin" /> : editingId ? "Salvar Alterações" : "Salvar DJ"}
+            <DialogFooter className="pt-4 border-t border-white/5 flex flex-col sm:flex-row gap-3">
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => setIsOpen(false)} 
+                className="w-full sm:w-1/3 rounded-2xl h-14 border-white/10 hover:bg-white/5 font-black text-slate-300 uppercase tracking-widest text-xs"
+              >
+                Cancelar
+              </Button>
+              <Button 
+                onClick={handleSave} 
+                disabled={loading} 
+                className="w-full sm:w-2/3 bg-pink-500 hover:bg-pink-600 text-white rounded-2xl h-14 font-black shadow-[0_0_20px_rgba(236,72,153,0.3)] uppercase tracking-widest text-xs flex items-center justify-center gap-2"
+              >
+                {loading ? <Loader2 className="animate-spin" /> : editingId ? "Salvar Alterações" : "Adicionar à Programação"}
               </Button>
             </DialogFooter>
           </DialogContent>

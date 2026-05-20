@@ -230,6 +230,12 @@ export function PendingChangesManager({ profile, selectedEventId }: PendingChang
         status: 'rejected',
         updatedAt: serverTimestamp()
       });
+
+      // Cleanup newly created card from database if its creation was rejected
+      if (change.type === 'create' && change.targetId) {
+        await deleteDoc(doc(db, 'events', selectedEventId, 'arts', change.targetId));
+      }
+
       toast.info("Alteração rejeitada e arquivada.");
     } catch (err) {
       console.error(err);

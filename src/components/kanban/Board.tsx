@@ -117,6 +117,65 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
     return () => unsubscribe();
   }, [event.id]);
 
+  const visibleArts = useMemo(() => {
+    // 1. If designer/admin, we only show approved/original database arts.
+    // Specifically, any art that isPendingCreate: true is hidden from the board until approved.
+    if (profile.role !== 'contractor') {
+      return arts.filter(art => !art.isPendingCreate);
+    }
+
+    // 2. If contractor, we construct their apparent view:
+    // Start with all database arts
+    const artsMap = new Map<string, ArtTask>();
+    arts.forEach(art => {
+      artsMap.set(art.id, { ...art });
+    });
+
+    const activeChanges = pendingChanges.filter(c => c.status === 'pending');
+
+    // Apply updates and statuses
+    activeChanges.forEach(change => {
+      if (change.type === 'update' && change.proposedData) {
+        const art = artsMap.get(change.targetId);
+        if (art) {
+          art.title = change.proposedData.title || art.title;
+          art.description = change.proposedData.description || art.description;
+          art.priority = change.proposedData.priority || art.priority;
+          art.category = change.proposedData.category || art.category;
+          art.deadline = change.proposedData.deadline || art.deadline;
+        }
+      }
+      else if (change.type === 'status' && change.proposedData) {
+        const art = artsMap.get(change.targetId);
+        if (art) {
+          art.status = change.proposedData.status || art.status;
+          if (change.proposedData.position !== undefined) {
+            art.position = change.proposedData.position;
+          }
+        }
+      }
+      else if (change.type === 'delete') {
+        const art = artsMap.get(change.targetId);
+        if (art) {
+          art.isPendingDelete = true;
+        }
+      }
+    });
+
+    // Sort or filter the visible arts
+    const result = Array.from(artsMap.values());
+    
+    // Sort so position is respected
+    result.sort((a, b) => {
+      const posA = a.position ?? 0;
+      const posB = b.position ?? 0;
+      if (posA !== posB) return posA - posB;
+      return (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0);
+    });
+
+    return result;
+  }, [arts, pendingChanges, profile.role]);
+
   const renderPendingBadge = (art: ArtTask, isMinimal = false) => {
     const activeChanges = pendingChanges.filter(c => c.targetId === art.id && c.status === 'pending');
     if (activeChanges.length === 0 && !art.isPendingCreate && !art.isPendingDelete) return null;
@@ -198,7 +257,7 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
     const path = `events/${event.id}/arts`;
     
     // Calculate new position
-    const columnArts = arts.filter(a => a.status === status);
+    const columnArts = visibleArts.filter(a => a.status === status);
     const maxPosition = columnArts.length > 0 
       ? Math.max(...columnArts.map(a => a.position || 0))
       : 0;
@@ -285,17 +344,7 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
     const path = `events/${event.id}/arts/${selectedArt.id}`;
     try {
       if (profile.role === 'contractor') {
-        // Update the art doc immediately!
-        await updateDoc(doc(db, 'events', event.id, 'arts', selectedArt.id), {
-          title: editArt.title || selectedArt.title,
-          description: editArt.description || '',
-          priority: editArt.priority || 'medium',
-          category: editArt.category || 'dj',
-          deadline: editArt.deadline || null,
-          status: editArt.status || 'todo'
-        });
-
-        // Register the pending change
+        // Register the pending change without modifying the live database document
         const pendingChangeData = {
           type: 'update',
           proposedData: {
@@ -526,6 +575,12 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
         status: 'rejected',
         updatedAt: serverTimestamp()
       });
+
+      // Cleanup newly created card from database if its creation was rejected
+      if (change.type === 'create' && change.targetId) {
+        await deleteDoc(doc(db, 'events', event.id, 'arts', change.targetId));
+      }
+
       toast.info("Alteração rejeitada e arquivada.");
     } catch (err) {
       console.error(err);
@@ -539,11 +594,8 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
     const path = `events/${event.id}/arts/${artId}`;
     try {
       if (profile.role === 'contractor') {
-        const artToMove = arts.find(a => a.id === artId);
+        const artToMove = visibleArts.find(a => a.id === artId);
         if (artToMove) {
-          // Update immediately!
-          await updateDoc(doc(db, 'events', event.id, 'arts', artId), { status: newStatus });
-
           const pendingChangeData = {
             type: 'status',
             proposedData: {
@@ -560,7 +612,7 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
             createdAt: serverTimestamp()
           };
           await addDoc(collection(db, 'events', event.id, 'pending_changes'), pendingChangeData);
-          toast.success("Status atualizado e enviado para aprovação do designer!");
+          toast.success("Status de coluna enviado para aprovação do designer!");
         }
       } else {
         await updateDoc(doc(db, 'events', event.id, 'arts', artId), { status: newStatus });
@@ -577,13 +629,8 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
     const path = `events/${event.id}/arts/${artId}`;
     try {
       if (profile.role === 'contractor') {
-        const artToDelete = arts.find(a => a.id === artId);
+        const artToDelete = visibleArts.find(a => a.id === artId);
         if (artToDelete) {
-          // Set isPendingDelete to true immediately on the art!
-          await updateDoc(doc(db, 'events', event.id, 'arts', artId), {
-            isPendingDelete: true
-          });
-
           const pendingChangeData = {
             type: 'delete',
             proposedData: null,
@@ -791,10 +838,43 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
       const newDate = destination.droppableId.replace('date:', '');
       const path = `events/${event.id}/arts/${draggableId}`;
       try {
-        await updateDoc(doc(db, 'events', event.id, 'arts', draggableId), {
-          deadline: newDate
-        });
-        toast.success(`Prazo alterado para ${format(parseISO(newDate), "dd/MM")}`);
+        if (profile.role === 'contractor') {
+          const artToMove = visibleArts.find(a => a.id === draggableId);
+          if (artToMove) {
+            const pendingChangeData = {
+              type: 'update',
+              proposedData: {
+                title: artToMove.title,
+                description: artToMove.description || '',
+                priority: artToMove.priority || 'medium',
+                category: artToMove.category || 'dj',
+                deadline: newDate,
+                status: artToMove.status || 'todo'
+              },
+              originalData: {
+                title: artToMove.title,
+                description: artToMove.description || '',
+                priority: artToMove.priority || 'medium',
+                category: artToMove.category || 'dj',
+                deadline: artToMove.deadline || null,
+                status: artToMove.status || 'todo'
+              },
+              targetId: draggableId,
+              title: `Definir prazo de "${artToMove.title}" para ${format(parseISO(newDate), "dd/MM")}`,
+              contractorName: profile.name || 'Cliente',
+              contractorEmail: profile.email,
+              status: 'pending',
+              createdAt: serverTimestamp()
+            };
+            await addDoc(collection(db, 'events', event.id, 'pending_changes'), pendingChangeData);
+            toast.success(`Prazo proposto para ${format(parseISO(newDate), "dd/MM")} (aguardando aprovação)`);
+          }
+        } else {
+          await updateDoc(doc(db, 'events', event.id, 'arts', draggableId), {
+            deadline: newDate
+          });
+          toast.success(`Prazo alterado para ${format(parseISO(newDate), "dd/MM")}`);
+        }
       } catch (err) {
         handleFirestoreError(err, OperationType.UPDATE, path);
         toast.error("Erro ao atualizar data");
@@ -807,7 +887,7 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
     const destIndex = destination.index;
 
     // Get all items in the destination column (excluding the one being moved if it's already there)
-    const columnArts = arts
+    const columnArts = visibleArts
       .filter(a => a.status === destStatus)
       .filter(a => a.id !== draggableId)
       .sort((a, b) => {
@@ -843,36 +923,27 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
     const path = `events/${event.id}/arts/${draggableId}`;
     try {
       if (profile.role === 'contractor') {
-        const artToMove = arts.find(a => a.id === draggableId);
-        if (artToMove) {
-          // Update immediately!
-          await updateDoc(doc(db, 'events', event.id, 'arts', draggableId), {
-            status: destStatus,
-            position: newPosition
-          });
-
-          // Only create pending_changes if it actually changed columns
-          if (artToMove.status !== destStatus) {
-            const pendingChangeData = {
-              type: 'status',
-              proposedData: {
-                status: destStatus,
-                position: newPosition
-              },
-              originalData: {
-                status: artToMove.status,
-                position: artToMove.position ?? 0
-              },
-              targetId: draggableId,
-              title: `Mover "${artToMove.title}" para ${translateStatus(destStatus)}`,
-              contractorName: profile.name || 'Cliente',
-              contractorEmail: profile.email,
-              status: 'pending',
-              createdAt: serverTimestamp()
-            };
-            await addDoc(collection(db, 'events', event.id, 'pending_changes'), pendingChangeData);
-            toast.success("Movimentação aplicada e enviada para aprovação do designer!");
-          }
+        const artToMove = visibleArts.find(a => a.id === draggableId);
+        if (artToMove && artToMove.status !== destStatus) {
+          const pendingChangeData = {
+            type: 'status',
+            proposedData: {
+              status: destStatus,
+              position: newPosition
+            },
+            originalData: {
+              status: artToMove.status,
+              position: artToMove.position ?? 0
+            },
+            targetId: draggableId,
+            title: `Mover "${artToMove.title}" para ${translateStatus(destStatus)}`,
+            contractorName: profile.name || 'Cliente',
+            contractorEmail: profile.email,
+            status: 'pending',
+            createdAt: serverTimestamp()
+          };
+          await addDoc(collection(db, 'events', event.id, 'pending_changes'), pendingChangeData);
+          toast.success("Movimentação de coluna enviada para aprovação do designer!");
         }
       } else {
         await updateDoc(doc(db, 'events', event.id, 'arts', draggableId), {
@@ -937,7 +1008,7 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
 
         <div className="flex items-center gap-3">
           <Badge variant="outline" className="bg-white/5 border-white/10 text-slate-400 font-bold uppercase tracking-widest text-[9px] rounded-full px-4 h-10 flex items-center">
-            {arts.length} Artes no Total
+            {visibleArts.length} Artes no Total
           </Badge>
         </div>
       </div>
