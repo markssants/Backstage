@@ -73,6 +73,18 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
   const [editArt, setEditArt] = useState<Partial<ArtTask> | null>(null);
 
   const [timelineDetail, setTimelineDetail] = useState<'urgent' | 'medium' | 'low' | 'completed' | null>(null);
+  const [pendingChanges, setPendingChanges] = useState<PendingChange[]>([]);
+
+  useEffect(() => {
+    const q = query(collection(db, 'events', event.id, 'pending_changes'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const fetchedChanges = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PendingChange));
+      setPendingChanges(fetchedChanges);
+    }, (error) => {
+      console.error("Erro ao escutar alterações do evento:", error);
+    });
+    return () => unsubscribe();
+  }, [event.id]);
 
   useEffect(() => {
     if (selectedArt) {
@@ -114,6 +126,21 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
 
     try {
       if (profile.role === 'contractor') {
+        // Create the art card first
+        const docRef = await addDoc(collection(db, 'events', event.id, 'arts'), {
+          ...newArt,
+          title: newArt.title.trim(),
+          description: newArt.description.trim(),
+          priority: newArt.priority,
+          category: newArt.category,
+          deadline: newArt.deadline || null,
+          status: status,
+          position: maxPosition + 1000,
+          isPendingCreate: true, // Mark it as pending
+          createdAt: serverTimestamp(),
+        });
+
+        // Register the pending change with the target doc ID
         const pendingChangeData = {
           type: 'create',
           proposedData: {
@@ -126,7 +153,7 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
             position: maxPosition + 1000
           },
           originalData: null,
-          targetId: '',
+          targetId: docRef.id,
           title: `Criação de nova Arte "${newArt.title}"`,
           contractorName: profile.name || 'Cliente',
           contractorEmail: profile.email,
@@ -144,7 +171,7 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
           color: '#000000',
           status: 'todo'
         });
-        toast.info("Sugestão de nova arte enviada para aprovação do designer!");
+        toast.info("Nova arte cadastrada e enviada para aprovação do designer!");
       } else {
         await addDoc(collection(db, 'events', event.id, 'arts'), {
           ...newArt,
@@ -179,6 +206,17 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
     const path = `events/${event.id}/arts/${selectedArt.id}`;
     try {
       if (profile.role === 'contractor') {
+        // Update the art doc immediately!
+        await updateDoc(doc(db, 'events', event.id, 'arts', selectedArt.id), {
+          title: editArt.title || selectedArt.title,
+          description: editArt.description || '',
+          priority: editArt.priority || 'medium',
+          category: editArt.category || 'dj',
+          deadline: editArt.deadline || null,
+          status: editArt.status || 'todo'
+        });
+
+        // Register the pending change
         const pendingChangeData = {
           type: 'update',
           proposedData: {
@@ -205,7 +243,7 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
           createdAt: serverTimestamp()
         };
         await addDoc(collection(db, 'events', event.id, 'pending_changes'), pendingChangeData);
-        toast.info("Alteração no briefing enviada para aprovação do designer!");
+        toast.info("Alteração salva e enviada para aprovação do designer!");
         setSelectedArt(null);
       } else {
         await updateDoc(doc(db, 'events', event.id, 'arts', selectedArt.id), {
@@ -233,6 +271,9 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
       if (profile.role === 'contractor') {
         const artToMove = arts.find(a => a.id === artId);
         if (artToMove) {
+          // Update immediately!
+          await updateDoc(doc(db, 'events', event.id, 'arts', artId), { status: newStatus });
+
           const pendingChangeData = {
             type: 'status',
             proposedData: {
@@ -249,7 +290,7 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
             createdAt: serverTimestamp()
           };
           await addDoc(collection(db, 'events', event.id, 'pending_changes'), pendingChangeData);
-          toast.info("Sugestão de alteração de status enviada para o designer!");
+          toast.success("Status atualizado e enviado para aprovação do designer!");
         }
       } else {
         await updateDoc(doc(db, 'events', event.id, 'arts', artId), { status: newStatus });
@@ -268,6 +309,11 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
       if (profile.role === 'contractor') {
         const artToDelete = arts.find(a => a.id === artId);
         if (artToDelete) {
+          // Set isPendingDelete to true immediately on the art!
+          await updateDoc(doc(db, 'events', event.id, 'arts', artId), {
+            isPendingDelete: true
+          });
+
           const pendingChangeData = {
             type: 'delete',
             proposedData: null,
@@ -281,6 +327,7 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
           };
           await addDoc(collection(db, 'events', event.id, 'pending_changes'), pendingChangeData);
           toast.info("Solicitação de exclusão enviada para aprovação do designer!");
+          setSelectedArt(null);
         }
       } else {
         await deleteDoc(doc(db, 'events', event.id, 'arts', artId));
@@ -520,26 +567,35 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
     try {
       if (profile.role === 'contractor') {
         const artToMove = arts.find(a => a.id === draggableId);
-        if (artToMove && artToMove.status !== destStatus) {
-          const pendingChangeData = {
-            type: 'status',
-            proposedData: {
-              status: destStatus,
-              position: newPosition
-            },
-            originalData: {
-              status: artToMove.status,
-              position: artToMove.position ?? 0
-            },
-            targetId: draggableId,
-            title: `Mover "${artToMove.title}" para ${translateStatus(destStatus)}`,
-            contractorName: profile.name || 'Cliente',
-            contractorEmail: profile.email,
-            status: 'pending',
-            createdAt: serverTimestamp()
-          };
-          await addDoc(collection(db, 'events', event.id, 'pending_changes'), pendingChangeData);
-          toast.info("Sugestão de movimentação enviada para aprovação do designer!");
+        if (artToMove) {
+          // Update immediately!
+          await updateDoc(doc(db, 'events', event.id, 'arts', draggableId), {
+            status: destStatus,
+            position: newPosition
+          });
+
+          // Only create pending_changes if it actually changed columns
+          if (artToMove.status !== destStatus) {
+            const pendingChangeData = {
+              type: 'status',
+              proposedData: {
+                status: destStatus,
+                position: newPosition
+              },
+              originalData: {
+                status: artToMove.status,
+                position: artToMove.position ?? 0
+              },
+              targetId: draggableId,
+              title: `Mover "${artToMove.title}" para ${translateStatus(destStatus)}`,
+              contractorName: profile.name || 'Cliente',
+              contractorEmail: profile.email,
+              status: 'pending',
+              createdAt: serverTimestamp()
+            };
+            await addDoc(collection(db, 'events', event.id, 'pending_changes'), pendingChangeData);
+            toast.success("Movimentação aplicada e enviada para aprovação do designer!");
+          }
         }
       } else {
         await updateDoc(doc(db, 'events', event.id, 'arts', draggableId), {
@@ -874,90 +930,115 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
                     className="flex-1 space-y-3 min-h-[100px]"
                   >
                     <AnimatePresence mode="popLayout">
-                      {filteredArts.filter(a => a.status === column.id).map((art, index) => (
-                        <Draggable key={art.id} draggableId={art.id} index={index}>
-                          {(provided, snapshot) => {
-                            const child = (
-                              <div
-                                ref={provided.innerRef}
-                                {...provided.draggableProps}
-                                {...provided.dragHandleProps}
-                                style={{
-                                  ...provided.draggableProps.style,
-                                  cursor: snapshot.isDragging ? 'grabbing' : 'pointer'
-                                }}
-                                className={cn(
-                                  "relative",
-                                  snapshot.isDragging && "z-[9999]"
-                                )}
-                              >
-                                <motion.div
-                                  key={art.id}
-                                  initial={{ opacity: 0, y: 10 }}
-                                  animate={{ 
-                                    opacity: 1, 
-                                    scale: snapshot.isDragging ? 1.05 : 1, 
-                                    y: 0,
-                                    rotate: snapshot.isDragging ? 2 : 0,
+                      {filteredArts.filter(a => a.status === column.id).map((art, index) => {
+                        const activeChange = pendingChanges.find(c => c.targetId === art.id && c.status === 'pending');
+                        return (
+                          <Draggable key={art.id} draggableId={art.id} index={index}>
+                            {(provided, snapshot) => {
+                              const child = (
+                                <div
+                                  ref={provided.innerRef}
+                                  {...provided.draggableProps}
+                                  {...provided.dragHandleProps}
+                                  style={{
+                                    ...provided.draggableProps.style,
+                                    cursor: snapshot.isDragging ? 'grabbing' : 'pointer'
                                   }}
-                                  exit={{ opacity: 0, scale: 0.8 }}
-                                  transition={{ 
-                                    type: "spring", 
-                                    damping: 25, 
-                                    stiffness: 350
-                                  }}
+                                  className={cn(
+                                    "relative",
+                                    snapshot.isDragging && "z-[9999]"
+                                  )}
                                 >
-                                  <Card 
-                                    onClick={() => !snapshot.isDragging && setSelectedArt(art)}
-                                    className={cn(
-                                      "rounded-xl border-white/5 shadow-2xl hover:bg-white/10 transition-all duration-300 group relative overflow-hidden backdrop-blur-md cursor-pointer",
-                                      snapshot.isDragging ? "bg-slate-800 border-white/20" : "bg-slate-900/60 border"
-                                    )}
+                                  <motion.div
+                                    key={art.id}
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ 
+                                      opacity: 1, 
+                                      scale: snapshot.isDragging ? 1.05 : 1, 
+                                      y: 0,
+                                      rotate: snapshot.isDragging ? 2 : 0,
+                                    }}
+                                    exit={{ opacity: 0, scale: 0.8 }}
+                                    transition={{ 
+                                      type: "spring", 
+                                      damping: 25, 
+                                      stiffness: 350
+                                    }}
                                   >
-                                    <div className={`absolute top-0 left-0 w-1 h-full shadow-[2px_0_15px_rgba(255,255,255,0.05)] ${getPriorityColor(art.priority)}`} />
-                                    <CardContent className="p-2.5 space-y-2">
-                                      <div className="flex justify-end items-start -mb-4 relative z-10 pr-1.5">
-                                        <span className="text-sm filter drop-shadow-[0_0_8px_rgba(255,255,255,0.2)]">
-                                          {art.category === 'dj' && '🎧'}
-                                          {art.category === 'party' && '🎪'}
-                                          {art.category === 'branding' && '⭐️'}
-                                        </span>
-                                      </div>
-
-                                      <div className="space-y-0.5 pl-1.5">
-                                        <h4 className="font-black text-white text-[12px] leading-tight group-hover:text-pink-300 transition-colors uppercase tracking-tight pr-6">{art.title}</h4>
-                                        {art.description && (
-                                          <p className="text-[9px] text-slate-400 line-clamp-2 italic font-medium leading-[1.4] opacity-70 group-hover:opacity-100 transition-opacity">
-                                            {art.description}
-                                          </p>
-                                        )}
-                                      </div>
-
-                                      <div className="flex items-center justify-between pt-2 border-t border-white/5 px-1.5">
-                                        <div className="flex items-center space-x-2 text-slate-500">
-                                          {art.priority === 'high' && <AlertTriangle className="w-3.5 h-3.5 text-red-500" />}
-                                          {art.priority === 'medium' && <AlertTriangle className="w-3.5 h-3.5 text-yellow-500" />}
-                                          {art.priority === 'low' && <Clock className="w-3.5 h-3.5 text-emerald-400" />}
-                                          <span className="text-[10px] font-black uppercase tracking-[0.1em]">{translatePriority(art.priority)}</span>
-                                        </div>
-                                        {art.deadline ? (
-                                          <div className="flex items-center space-x-1 text-slate-400">
-                                            <Calendar className="w-2.5 h-2.5 text-blue-400" />
-                                            <span className="text-[8px] font-black tracking-tighter">
-                                              {format(parseISO(art.deadline), "dd/MM", { locale: ptBR })}
-                                            </span>
+                                    <Card 
+                                      onClick={() => !snapshot.isDragging && setSelectedArt(art)}
+                                      className={cn(
+                                        "rounded-xl border-white/5 shadow-2xl hover:bg-white/10 transition-all duration-300 group relative overflow-hidden backdrop-blur-md cursor-pointer",
+                                        snapshot.isDragging ? "bg-slate-800 border-white/20" : "bg-slate-900/60 border",
+                                        art.isPendingDelete && "opacity-50 border-rose-500/30"
+                                      )}
+                                    >
+                                      <div className={`absolute top-0 left-0 w-1 h-full shadow-[2px_0_15px_rgba(255,255,255,0.05)] ${getPriorityColor(art.priority)}`} />
+                                      <CardContent className="p-2.5 space-y-2">
+                                        <div className="flex justify-between items-start -mb-4 relative z-10 px-1.5 pt-0.5">
+                                          <div>
+                                            {activeChange ? (
+                                              <span className={cn(
+                                                "px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider inline-flex items-center gap-1 border animate-pulse",
+                                                activeChange.type === 'create' ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30 shadow-[0_0_8px_rgba(16,185,129,0.2)]" :
+                                                activeChange.type === 'update' ? "bg-amber-500/20 text-amber-400 border-amber-500/30" :
+                                                activeChange.type === 'status' ? "bg-purple-500/20 text-purple-400 border-purple-500/30" :
+                                                "bg-rose-500/20 text-rose-400 border-rose-500/30 font-bold"
+                                              )}>
+                                                <Clock className="w-2 h-2 animate-pulse" />
+                                                {activeChange.type === 'create' ? "Novo" :
+                                                 activeChange.type === 'update' ? "Editado" :
+                                                 activeChange.type === 'status' ? "Movido" :
+                                                 "Excluindo"}
+                                              </span>
+                                            ) : art.isPendingCreate ? (
+                                              <span className="px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider inline-flex items-center gap-1 border bg-emerald-500/20 text-emerald-400 border-emerald-500/30 shadow-[0_0_8px_rgba(16,185,129,0.2)] animate-pulse">
+                                                <Clock className="w-2 h-2 animate-pulse" />
+                                                Novo
+                                              </span>
+                                            ) : null}
                                           </div>
-                                        ) : (
-                                          <span className="text-[8px] font-black text-slate-700 uppercase tracking-widest border border-white/5 px-2 py-0.5 rounded-full bg-white/[0.02]">
-                                            S/ Prazo
+                                          <span className="text-sm filter drop-shadow-[0_0_8px_rgba(255,255,255,0.2)]">
+                                            {art.category === 'dj' && '🎧'}
+                                            {art.category === 'party' && '🎪'}
+                                            {art.category === 'branding' && '⭐️'}
                                           </span>
-                                        )}
-                                      </div>
-                                    </CardContent>
-                                  </Card>
-                                </motion.div>
-                              </div>
-                            );
+                                        </div>
+
+                                        <div className="space-y-0.5 pl-1.5">
+                                          <h4 className="font-black text-white text-[12px] leading-tight group-hover:text-pink-300 transition-colors uppercase tracking-tight pr-6">{art.title}</h4>
+                                          {art.description && (
+                                            <p className="text-[9px] text-slate-400 line-clamp-2 italic font-medium leading-[1.4] opacity-70 group-hover:opacity-100 transition-opacity">
+                                              {art.description}
+                                            </p>
+                                          )}
+                                        </div>
+
+                                        <div className="flex items-center justify-between pt-2 border-t border-white/5 px-1.5">
+                                          <div className="flex items-center space-x-2 text-slate-500">
+                                            {art.priority === 'high' && <AlertTriangle className="w-3.5 h-3.5 text-red-500" />}
+                                            {art.priority === 'medium' && <AlertTriangle className="w-3.5 h-3.5 text-yellow-500" />}
+                                            {art.priority === 'low' && <Clock className="w-3.5 h-3.5 text-emerald-400" />}
+                                            <span className="text-[10px] font-black uppercase tracking-[0.1em]">{translatePriority(art.priority)}</span>
+                                          </div>
+                                          {art.deadline ? (
+                                            <div className="flex items-center space-x-1 text-slate-400">
+                                              <Calendar className="w-2.5 h-2.5 text-blue-400" />
+                                              <span className="text-[8px] font-black tracking-tighter">
+                                                {format(parseISO(art.deadline), "dd/MM", { locale: ptBR })}
+                                              </span>
+                                            </div>
+                                          ) : (
+                                            <span className="text-[8px] font-black text-slate-700 uppercase tracking-widest border border-white/5 px-2 py-0.5 rounded-full bg-white/[0.02]">
+                                              S/ Prazo
+                                            </span>
+                                          )}
+                                        </div>
+                                      </CardContent>
+                                    </Card>
+                                  </motion.div>
+                                </div>
+                              );
 
                             if (snapshot.isDragging) {
                               return createPortal(child, document.body);
@@ -965,7 +1046,8 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
                             return child;
                           }}
                         </Draggable>
-                      ))}
+                      );
+                    })}
                     </AnimatePresence>
                     {provided.placeholder}
                     {filteredArts.filter(a => a.status === column.id).length === 0 && (
@@ -1338,6 +1420,54 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
                 </DialogHeader>
 
                 <div className="space-y-6">
+                  {(() => {
+                    const activeChange = pendingChanges.find(c => c.targetId === selectedArt.id && c.status === 'pending');
+                    if (!activeChange) return null;
+                    return (
+                      <div className="p-5 rounded-[2rem] bg-amber-500/5 border border-amber-500/10 space-y-3 relative overflow-hidden backdrop-blur-md">
+                        <div className="flex items-center gap-2 text-amber-400 font-black text-[10px] uppercase tracking-wider">
+                          <Clock className="w-3.5 h-3.5 animate-pulse" />
+                          <span>Alterações Ativas Pendentes de Validação</span>
+                        </div>
+                        <div className="text-[11px] text-slate-300 leading-relaxed font-semibold">
+                          Esta tarefa possui as seguintes alterações sugeridas pelo contratante que estão aguardando aprovação do designer:
+                        </div>
+                        <div className="grid grid-cols-2 gap-4 pt-2 border-t border-white/5">
+                          {activeChange.originalData?.description !== activeChange.proposedData?.description && (
+                            <div className="col-span-2 space-y-1">
+                              <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Mudança na Descrição:</span>
+                              <div className="grid grid-cols-2 gap-3 text-[10px]">
+                                <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-slate-400 max-h-[140px] overflow-y-auto">
+                                  <span className="font-bold block text-red-400 mb-1">Original:</span>
+                                  <span className="italic">{activeChange.originalData?.description || "Sem descrição"}</span>
+                                </div>
+                                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 max-h-[140px] overflow-y-auto">
+                                  <span className="font-bold block text-emerald-400 mb-1">Proposto:</span>
+                                  <span className="italic">{activeChange.proposedData?.description || "Sem descrição"}</span>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                          {activeChange.originalData?.title !== activeChange.proposedData?.title && (
+                            <div className="col-span-2 space-y-1">
+                              <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Mudança no Título:</span>
+                              <div className="grid grid-cols-2 gap-3 text-[10px]">
+                                <div className="p-2.5 rounded-xl bg-white/5 border border-white/5 text-slate-400">
+                                  <span className="font-bold block text-slate-500 mb-1">Original:</span>
+                                  <span>{activeChange.originalData?.title}</span>
+                                </div>
+                                <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300">
+                                  <span className="font-bold block text-amber-400 mb-1">Proposto:</span>
+                                  <span>{activeChange.proposedData?.title}</span>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                   <div className="space-y-3">
                     <Label className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] px-2 italic">Descrição & Instruções</Label>
                     <Textarea 

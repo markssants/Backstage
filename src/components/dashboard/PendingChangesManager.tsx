@@ -29,7 +29,7 @@ export function PendingChangesManager({ profile, selectedEventId }: PendingChang
   const isDesigner = profile.role === 'designer' || profile.email === 'beysarts@gmail.com';
 
   useEffect(() => {
-    if (!selectedEventId || !isDesigner) {
+    if (!selectedEventId) {
       setPendingChanges([]);
       setHistoryChanges([]);
       return;
@@ -69,7 +69,7 @@ export function PendingChangesManager({ profile, selectedEventId }: PendingChang
       unsubscribePending();
       unsubscribeHistory();
     };
-  }, [selectedEventId, isDesigner]);
+  }, [selectedEventId]);
 
   // Translate helpers
   const translatePriority = (priority: string) => {
@@ -186,8 +186,6 @@ export function PendingChangesManager({ profile, selectedEventId }: PendingChang
     }
   };
 
-  if (!isDesigner) return null;
-
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger render={
@@ -217,10 +215,12 @@ export function PendingChangesManager({ profile, selectedEventId }: PendingChang
             <div>
               <DialogTitle className="text-2xl font-black text-white tracking-tighter flex items-center gap-3">
                 <Bell className="w-6 h-6 text-pink-400 animate-pulse" />
-                Alterações do Cliente
+                {isDesigner ? "Alterações do Cliente" : "Suas Solicitações"}
               </DialogTitle>
               <p className="text-xs text-slate-400 mt-1">
-                Revise, aprove ou recuse as solicitações de briefing enviadas pelo contratante abaixo.
+                {isDesigner 
+                  ? "Revise, aprove ou recuse as solicitações de briefing enviadas pelo contratante abaixo."
+                  : "Acompanhe abaixo o status e histórico de todas as alterações sugeridas para o designer."}
               </p>
             </div>
             
@@ -426,25 +426,34 @@ export function PendingChangesManager({ profile, selectedEventId }: PendingChang
                     </div>
 
                     {/* Approve / Reject buttons */}
-                    <div className="flex items-center gap-3 justify-end pt-1">
-                      <Button
-                        variant="ghost"
-                        disabled={loadingId === change.id}
-                        onClick={() => handleReject(change)}
-                        className="rounded-xl text-xs font-black text-rose-400 hover:text-white hover:bg-rose-600/20"
-                      >
-                        <X className="w-4 h-4 mr-1.5" />
-                        Recusar
-                      </Button>
-                      <Button
-                        disabled={loadingId === change.id}
-                        onClick={() => handleApprove(change)}
-                        className="rounded-xl text-xs font-black bg-emerald-500 hover:bg-emerald-600 text-white shadow-md shadow-emerald-500/10"
-                      >
-                        <Check className="w-4 h-4 mr-1.5" />
-                        Aprovar Alteração
-                      </Button>
-                    </div>
+                    {isDesigner ? (
+                      <div className="flex items-center gap-3 justify-end pt-1">
+                        <Button
+                          variant="ghost"
+                          disabled={loadingId === change.id}
+                          onClick={() => handleReject(change)}
+                          className="rounded-xl text-xs font-black text-rose-400 hover:text-white hover:bg-rose-600/20"
+                        >
+                          <X className="w-4 h-4 mr-1.5" />
+                          Recusar
+                        </Button>
+                        <Button
+                          disabled={loadingId === change.id}
+                          onClick={() => handleApprove(change)}
+                          className="rounded-xl text-xs font-black bg-emerald-500 hover:bg-emerald-600 text-white shadow-md shadow-emerald-500/10"
+                        >
+                          <Check className="w-4 h-4 mr-1.5" />
+                          Aprovar Alteração
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-end pt-1">
+                        <span className="px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5 animate-spin-slow" />
+                          Aguardando validação do designer
+                        </span>
+                      </div>
+                    )}
                   </motion.div>
                 ))
               )

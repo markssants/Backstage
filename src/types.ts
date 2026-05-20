@@ -40,6 +40,8 @@ export interface ArtTask {
   status: 'todo' | 'production' | 'review' | 'delivered' | 'post' | 'finished';
   position: number;
   color?: string;
+  isPendingCreate?: boolean;
+  isPendingDelete?: boolean;
   createdAt: any;
 }
 
