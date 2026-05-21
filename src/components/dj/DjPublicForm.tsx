@@ -226,7 +226,7 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
               {/* Context bar */}
               <div className="bg-gradient-to-r from-purple-900/40 via-pink-900/20 to-transparent p-8 border-b border-white/5">
                 <div className="flex items-center gap-1.5 text-xs text-pink-400 font-black uppercase tracking-widest mb-1">
-                  <Sparkles className="w-3.5 h-3.5" /> Ficha de Atendimento
+                  <Sparkles className="w-3.5 h-3.5" /> Ficha Presskit
                 </div>
                 <h1 className="text-3xl font-black uppercase tracking-tight text-white mb-2">{asset.name}</h1>
                 <p className="text-slate-400 text-sm max-w-xl">
@@ -258,7 +258,7 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
                   <div className="flex items-center justify-between">
                     <Label className="text-[11px] uppercase font-black tracking-widest text-slate-300 flex items-center gap-1.5">
                       <span className="w-5 h-5 rounded bg-pink-500/20 text-pink-400 flex items-center justify-center font-bold text-[9px] mr-1">1</span>
-                      Link do seu Presskit completo / Promo <span className="text-pink-500 font-bold">*</span>
+                      Link do seu Presskit <span className="text-pink-500 font-bold">*</span>
                     </Label>
                     {presskitUrl && (
                       <a href={presskitUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-pink-400 hover:text-pink-300 font-bold flex items-center gap-1">
@@ -278,63 +278,75 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
                   </p>
                 </div>
 
-                {/* 2 - Logos Mandatórios Info */}
-                {asset.hasMandatoryLogo && (
-                  <div className="bg-amber-500/5 border border-amber-500/10 rounded-2xl p-5 space-y-4">
-                    <p className="text-xs font-black uppercase tracking-widest text-amber-400 flex items-center gap-1.5">
-                      <ShieldCheck className="w-4 h-4" /> Importante: Logos Obrigatórios em sua Arte
-                    </p>
-                    <p className="text-xs text-slate-400 leading-relaxed">
-                      Sua assessoria configurou as seguintes logos obrigatórias para inserção em suas peças e flyers. Certifique-se de incluí-las na pasta de Presskit caso estejam em branco ou de enviá-las para os designers:
-                    </p>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-                      {asset.agencies && asset.agencies.length > 0 && asset.agencies.some(a => a.name) && (
-                        <div className="space-y-2 bg-white/[0.02] border border-white/5 rounded-xl p-3">
-                          <p className="text-[9px] uppercase font-black tracking-widest text-slate-500">Agências de Booking:</p>
-                          <ul className="space-y-1.5">
-                            {asset.agencies.map((agency, i) => agency.name && (
-                              <li key={i} className="text-xs flex items-center justify-between font-bold text-slate-300">
-                                <span className="truncate">{agency.name}</span>
-                                {agency.link && (
-                                  <a href={agency.link} target="_blank" rel="noopener noreferrer" className="text-[10px] text-amber-400 hover:underline flex items-center gap-0.5">
-                                    Logo <ExternalLink className="w-2.5 h-2.5" />
-                                  </a>
-                                )}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-
-                      {asset.labels && asset.labels.length > 0 && asset.labels.some(l => l.name) && (
-                        <div className="space-y-2 bg-white/[0.02] border border-white/5 rounded-xl p-3">
-                          <p className="text-[9px] uppercase font-black tracking-widest text-slate-500">Gravadoras / Labels:</p>
-                          <ul className="space-y-1.5">
-                            {asset.labels.map((label, i) => label.name && (
-                              <li key={i} className="text-xs flex items-center justify-between font-bold text-slate-300">
-                                <span className="truncate">{label.name}</span>
-                                {label.link && (
-                                  <a href={label.link} target="_blank" rel="noopener noreferrer" className="text-[10px] text-amber-400 hover:underline flex items-center gap-0.5">
-                                    Logo <ExternalLink className="w-2.5 h-2.5" />
-                                  </a>
-                                )}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </div>
+                {/* 2 - Logos Obrigatórios (Agências e Gravadoras) */}
+                <div className="border-t border-white/5 pt-6 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-[11px] uppercase font-black tracking-widest text-slate-300 flex items-center gap-1.5">
+                      <span className="w-5 h-5 rounded bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-[9px] mr-1">2</span>
+                      Logos Obrigatórios (Agências e Gravadoras)
+                    </Label>
                   </div>
-                )}
+                  
+                  {asset.hasMandatoryLogo && ((asset.agencies && asset.agencies.length > 0 && asset.agencies.some(a => a.name)) || (asset.labels && asset.labels.length > 0 && asset.labels.some(l => l.name))) ? (
+                    <div className="bg-amber-500/5 border border-amber-500/10 rounded-2xl p-5 space-y-4">
+                      <p className="text-xs text-slate-400 leading-relaxed">
+                        Sua assessoria configurou as seguintes logos obrigatórias para inserção em suas peças e flyers. Certifique-se de incluí-las na pasta de Presskit caso estejam em branco ou de enviá-las para os designers:
+                      </p>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                        {asset.agencies && asset.agencies.length > 0 && asset.agencies.some(a => a.name) && (
+                          <div className="space-y-2 bg-white/[0.02] border border-white/5 rounded-xl p-3">
+                            <p className="text-[9px] uppercase font-black tracking-widest text-slate-500">Agências de Booking:</p>
+                            <ul className="space-y-1.5">
+                              {asset.agencies.map((agency, i) => agency.name && (
+                                <li key={i} className="text-xs flex items-center justify-between font-bold text-slate-300">
+                                  <span className="truncate">{agency.name}</span>
+                                  {agency.link && (
+                                    <a href={agency.link} target="_blank" rel="noopener noreferrer" className="text-[10px] text-amber-400 hover:underline flex items-center gap-0.5">
+                                      Logo <ExternalLink className="w-2.5 h-2.5" />
+                                    </a>
+                                  )}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {asset.labels && asset.labels.length > 0 && asset.labels.some(l => l.name) && (
+                          <div className="space-y-2 bg-white/[0.02] border border-white/5 rounded-xl p-3">
+                            <p className="text-[9px] uppercase font-black tracking-widest text-slate-500">Gravadoras / Labels:</p>
+                            <ul className="space-y-1.5">
+                              {asset.labels.map((label, i) => label.name && (
+                                <li key={i} className="text-xs flex items-center justify-between font-bold text-slate-300">
+                                  <span className="truncate">{label.name}</span>
+                                  {label.link && (
+                                    <a href={label.link} target="_blank" rel="noopener noreferrer" className="text-[10px] text-amber-400 hover:underline flex items-center gap-0.5">
+                                      Logo <ExternalLink className="w-2.5 h-2.5" />
+                                    </a>
+                                  )}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-5 text-center">
+                      <p className="text-xs text-slate-400 italic">
+                        Nenhum logo obrigatório de agência ou gravadora foi exigido para este evento.
+                      </p>
+                    </div>
+                  )}
+                </div>
 
                 {/* 3 - Imagem de Apoio & Motion */}
                 <div className="border-t border-white/5 pt-6 space-y-4">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Image className="w-4 h-4 text-emerald-400" />
-                      <span className="text-xs uppercase font-black tracking-widest text-slate-300">Prefiro enviar uma Foto específica para o flyer</span>
-                    </div>
+                    <Label className="text-[11px] uppercase font-black tracking-widest text-slate-300 flex items-center gap-1.5 cursor-pointer" htmlFor="public-has-visual-material">
+                      <span className="w-5 h-5 rounded bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-[9px] mr-1">3</span>
+                      Escolher Foto e Vídeo Específica
+                    </Label>
                     <Checkbox 
                       id="public-has-visual-material" 
                       checked={hasVisualMaterial}
@@ -373,10 +385,10 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
                 {/* 4 - Música de Entrada */}
                 <div className="border-t border-white/5 pt-6 space-y-5">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Music className="w-4 h-4 text-pink-400" />
-                      <span className="text-xs uppercase font-black tracking-widest text-slate-300">Quero enviar uma música para minha trilha no Motion ou rádio comercial</span>
-                    </div>
+                    <Label className="text-[11px] uppercase font-black tracking-widest text-slate-300 flex items-center gap-1.5 cursor-pointer" htmlFor="public-has-playlist">
+                      <span className="w-5 h-5 rounded bg-pink-500/20 text-pink-400 flex items-center justify-center font-bold text-[9px] mr-1">4</span>
+                      Escolher Track Especifica
+                    </Label>
                     <Checkbox 
                       id="public-has-playlist" 
                       checked={hasPlaylist}
