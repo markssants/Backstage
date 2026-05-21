@@ -164,25 +164,25 @@ function Landing({ handleLogin, loginLoading }: { handleLogin: () => void, login
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="max-w-md w-full text-center space-y-8 glass-card p-12 rounded-3xl"
+            className="max-w-md w-full text-center space-y-8 glass-card p-6 sm:p-12 rounded-3xl"
           >
             <div className="flex justify-center space-x-[-12px]">
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-purple-500 to-pink-500 flex items-center justify-center transform -rotate-12 shadow-xl">
-                <Palette className="text-white w-8 h-8" />
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-tr from-purple-500 to-pink-500 flex items-center justify-center transform -rotate-12 shadow-xl">
+                <Palette className="text-white w-7 h-7 sm:w-8 sm:h-8" />
               </div>
-              <div className="w-16 h-16 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center shadow-lg z-10 border border-white/20">
-                <Calendar className="text-pink-400 w-8 h-8" />
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center shadow-lg z-10 border border-white/20">
+                <Calendar className="text-pink-400 w-7 h-7 sm:w-8 sm:h-8" />
               </div>
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-pink-500 to-purple-500 flex items-center justify-center transform rotate-12 shadow-xl">
-                <Music className="text-white w-8 h-8" />
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-br from-pink-500 to-purple-500 flex items-center justify-center transform rotate-12 shadow-xl">
+                <Music className="text-white w-7 h-7 sm:w-8 sm:h-8" />
               </div>
             </div>
             
             <div className="space-y-4">
-              <h1 className="text-6xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-white via-pink-200 to-slate-400 font-outfit">
+              <h1 className="text-4xl sm:text-6xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-white via-pink-200 to-slate-400 font-outfit">
                 BACKSTAGE
               </h1>
-              <p className="text-slate-400 text-lg leading-relaxed">
+              <p className="text-slate-400 text-sm sm:text-lg leading-relaxed">
                 Gestão de eventos e artes em um só lugar. Organize presskits, cronogramas e pagamentos.
               </p>
             </div>
@@ -190,7 +190,7 @@ function Landing({ handleLogin, loginLoading }: { handleLogin: () => void, login
             <Button 
               size="lg" 
               onClick={() => setShowPassword(true)}
-              className="w-full h-14 text-lg font-bold bg-pink-500 hover:bg-pink-600 text-white transition-all rounded-2xl shadow-[0_0_20px_rgba(236,72,153,0.3)] hover:shadow-[0_0_30_rgba(236,72,153,0.5)] border-none group"
+              className="w-full h-12 sm:h-14 text-base sm:text-lg font-bold bg-pink-500 hover:bg-pink-600 text-white transition-all rounded-2xl shadow-[0_0_20px_rgba(236,72,153,0.3)] hover:shadow-[0_0_30_rgba(236,72,153,0.5)] border-none group"
             >
               <LogIn className="mr-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
               Entrar agora
@@ -202,7 +202,7 @@ function Landing({ handleLogin, loginLoading }: { handleLogin: () => void, login
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
-            className="max-w-md w-full glass-card p-10 rounded-[2.5rem] border-white/10"
+            className="max-w-md w-full glass-card p-6 sm:p-10 rounded-2xl sm:rounded-[2.5rem] border-white/10"
           >
             <div className="text-center space-y-6">
               <div className="w-16 h-16 bg-pink-500/20 rounded-2xl flex items-center justify-center mx-auto shadow-[0_0_20px_rgba(236,72,153,0.1)]">

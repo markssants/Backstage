@@ -171,12 +171,12 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0518] text-slate-100 flex flex-col items-center py-12 px-4 relative overflow-y-auto">
+    <div className="min-h-screen bg-[#0a0518] text-slate-100 flex flex-col items-center py-6 sm:py-12 px-4 relative overflow-y-auto">
       {/* Glow Effects */}
       <div className="glow-purple top-[-10%] left-[-10%] w-[50%] h-[50%] opacity-50" />
       <div className="glow-pink bottom-[10%] right-[-5%] w-[45%] h-[45%] opacity-40" />
 
-      <div className="max-w-2xl w-full relative z-10 space-y-8">
+      <div className="max-w-2xl w-full relative z-10 space-y-6 sm:space-y-8">
         
         {/* Header decoration */}
         <div className="flex items-center justify-center gap-3">
@@ -193,15 +193,15 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="glass-card p-10 rounded-[2.5rem] border-emerald-500/20 text-center space-y-6"
+              className="glass-card p-6 sm:p-10 rounded-3xl sm:rounded-[2.5rem] border-emerald-500/20 text-center space-y-6"
             >
-              <div className="w-20 h-20 bg-emerald-500/10 text-emerald-400 rounded-full flex items-center justify-center mx-auto shadow-[0_0_20px_rgba(16,185,129,0.15)]">
-                <CheckCircle2 className="w-10 h-10" />
+              <div className="w-16 h-16 sm:w-20 sm:h-20 bg-emerald-500/10 text-emerald-400 rounded-full flex items-center justify-center mx-auto shadow-[0_0_20px_rgba(16,185,129,0.15)]">
+                <CheckCircle2 className="w-8 h-8 sm:w-10 sm:h-10" />
               </div>
               
               <div className="space-y-2">
-                <h2 className="text-3xl font-black text-white tracking-tight">Tudo Pronto, {asset.name}!</h2>
-                <p className="text-slate-400 text-base max-w-md mx-auto">
+                <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight">Tudo Pronto, {asset.name}!</h2>
+                <p className="text-slate-400 text-sm sm:text-base max-w-md mx-auto">
                   Suas mídias, presskit e trilha de entrada foram salvos e integrados diretamente no cronograma de produção do painel.
                 </p>
               </div>
@@ -209,7 +209,7 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
               <div className="pt-6 border-t border-white/5 flex justify-center">
                 <Button 
                   onClick={() => setSuccess(false)}
-                  className="rounded-2xl h-12 bg-white/5 hover:bg-white/10 text-slate-300 font-bold px-8 uppercase tracking-widest text-[10px]"
+                  className="rounded-2xl h-11 sm:h-12 bg-white/5 hover:bg-white/10 text-slate-300 font-bold px-6 sm:px-8 uppercase tracking-widest text-[9px] sm:text-[10px]"
                 >
                   Editar Informações Novamente
                 </Button>
@@ -221,47 +221,47 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -15 }}
-              className="glass-card rounded-[2.5rem] border-white/5 overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.5)]"
+              className="glass-card rounded-3xl sm:rounded-[2.5rem] border-white/5 overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.5)]"
             >
               {/* Context bar */}
-              <div className="bg-gradient-to-r from-purple-900/40 via-pink-900/20 to-transparent p-8 border-b border-white/5">
+              <div className="bg-gradient-to-r from-purple-900/40 via-pink-900/20 to-transparent p-5 sm:p-8 border-b border-white/5">
                 <div className="flex items-center gap-1.5 text-xs text-pink-400 font-black uppercase tracking-widest mb-1">
                   <Sparkles className="w-3.5 h-3.5" /> Ficha Presskit
                 </div>
-                <h1 className="text-3xl font-black uppercase tracking-tight text-white mb-2">{asset.name}</h1>
-                <p className="text-slate-400 text-sm max-w-xl">
+                <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-tight text-white mb-2">{asset.name}</h1>
+                <p className="text-slate-400 text-xs sm:text-sm max-w-xl leading-relaxed">
                   Insira seus links e arquivos abaixo para a produção e assessoria do evento. Você pode editar estas informações a qualquer momento usando este mesmo link.
                 </p>
 
                 {/* Deadline & details tags */}
-                <div className="flex flex-wrap items-center gap-3 mt-4">
+                <div className="flex flex-wrap items-center gap-2 mt-4">
                   {asset.artDeadline && (
-                    <div className="flex items-center gap-1.5 px-3 py-1 bg-pink-500/10 border border-pink-500/20 text-pink-400 rounded-full text-[10px] font-black uppercase tracking-widest">
+                    <div className="flex items-center gap-1.5 px-3 py-1 bg-pink-500/10 border border-pink-500/20 text-pink-400 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-widest">
                       <Calendar className="w-3 h-3" />
-                      Prazo do Material: {asset.artDeadline}
+                      Prazo: {asset.artDeadline}
                     </div>
                   )}
                   {asset.hasMandatoryLogo && (
-                    <div className="flex items-center gap-1.5 px-3 py-1 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-full text-[10px] font-black uppercase tracking-widest">
+                    <div className="flex items-center gap-1.5 px-3 py-1 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-widest">
                       <ShieldCheck className="w-3 h-3" />
-                      Logos Obrigatórios Ativos
+                      Logos Obrigatórios
                     </div>
                   )}
                 </div>
               </div>
 
               {/* Form entries */}
-              <form onSubmit={handleSave} className="p-8 space-y-8">
+              <form onSubmit={handleSave} className="p-5 sm:p-8 space-y-6 sm:space-y-8">
                 
                 {/* 1 - Link do Presskit */}
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-[11px] uppercase font-black tracking-widest text-slate-300 flex items-center gap-1.5">
-                      <span className="w-5 h-5 rounded bg-pink-500/20 text-pink-400 flex items-center justify-center font-bold text-[9px] mr-1">1</span>
-                      Link do seu Presskit <span className="text-pink-500 font-bold">*</span>
+                <div className="space-y-3 sm:space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <Label className="text-[11px] uppercase font-black tracking-widest text-slate-300 flex items-center gap-1.5 cursor-pointer">
+                      <span className="w-5 h-5 rounded bg-pink-500/20 text-pink-400 flex items-center justify-center font-bold text-[9px] shrink-0">1</span>
+                      <span className="leading-normal">Link do seu Presskit <span className="text-pink-500 font-bold">*</span></span>
                     </Label>
                     {presskitUrl && (
-                      <a href={presskitUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-pink-400 hover:text-pink-300 font-bold flex items-center gap-1">
+                      <a href={presskitUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-pink-400 hover:text-pink-300 font-bold flex items-center gap-1 self-start sm:self-auto pl-6 sm:pl-0">
                         Ver Link <ExternalLink className="w-3 h-3" />
                       </a>
                     )}
@@ -271,9 +271,9 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
                     value={presskitUrl} 
                     onChange={e => setPresskitUrl(e.target.value)} 
                     placeholder="Cole aqui o link do seu GDrive, Dropbox, Linktree ou Direct.me" 
-                    className="rounded-2xl bg-white/5 border-white/10 text-white h-12 focus:border-pink-500"
+                    className="rounded-2xl bg-white/5 border-white/10 text-white h-11 sm:h-12 text-sm focus:border-pink-500"
                   />
-                  <p className="text-[11px] text-slate-500 leading-relaxed italic">
+                  <p className="text-[10px] sm:text-[11px] text-slate-500 leading-relaxed italic">
                     Forneça o link de uma pasta compartilhada contendo suas fotos oficiais em alta resolução, release e logos da assessoria.
                   </p>
                 </div>
@@ -282,13 +282,13 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
                 <div className="border-t border-white/5 pt-6 space-y-4">
                   <div className="flex items-center justify-between">
                     <Label className="text-[11px] uppercase font-black tracking-widest text-slate-300 flex items-center gap-1.5">
-                      <span className="w-5 h-5 rounded bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-[9px] mr-1">2</span>
-                      Logos Obrigatórios (Agências e Gravadoras)
+                      <span className="w-5 h-5 rounded bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-[9px] shrink-0">2</span>
+                      <span className="leading-normal">Logos Obrigatórios (Agências e Gravadoras)</span>
                     </Label>
                   </div>
                   
                   {asset.hasMandatoryLogo && ((asset.agencies && asset.agencies.length > 0 && asset.agencies.some(a => a.name)) || (asset.labels && asset.labels.length > 0 && asset.labels.some(l => l.name))) ? (
-                    <div className="bg-amber-500/5 border border-amber-500/10 rounded-2xl p-5 space-y-4">
+                    <div className="bg-amber-500/5 border border-amber-500/10 rounded-2xl p-4 sm:p-5 space-y-4">
                       <p className="text-xs text-slate-400 leading-relaxed">
                         Sua assessoria configurou as seguintes logos obrigatórias para inserção em suas peças e flyers. Certifique-se de incluí-las na pasta de Presskit caso estejam em branco ou de enviá-las para os designers:
                       </p>
@@ -342,16 +342,16 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
 
                 {/* 3 - Imagem de Apoio & Motion */}
                 <div className="border-t border-white/5 pt-6 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-[11px] uppercase font-black tracking-widest text-slate-300 flex items-center gap-1.5 cursor-pointer" htmlFor="public-has-visual-material">
-                      <span className="w-5 h-5 rounded bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-[9px] mr-1">3</span>
-                      Escolher Foto e Vídeo Específica
+                  <div className="flex items-start sm:items-center justify-between gap-3">
+                    <Label className="text-[11px] uppercase font-black tracking-widest text-slate-300 flex items-center gap-1.5 cursor-pointer select-none" htmlFor="public-has-visual-material">
+                      <span className="w-5 h-5 rounded bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-[9px] shrink-0">3</span>
+                      <span className="leading-normal">Escolher Foto e Vídeo Específica</span>
                     </Label>
                     <Checkbox 
                       id="public-has-visual-material" 
                       checked={hasVisualMaterial}
                       onCheckedChange={(checked) => setHasVisualMaterial(checked === true)}
-                      className="border-slate-500 data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
+                      className="border-slate-500 data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500 shrink-0 mt-0.5 sm:mt-0"
                     />
                   </div>
 
@@ -368,14 +368,14 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
                           <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400 flex items-center gap-1">
                             Foto para o Flyer (Ex: Nome do arquivo no Drive ou Link do Drive) <span className="text-pink-500 font-bold">*</span>
                           </Label>
-                          <Input value={flyerPhoto} onChange={e => setFlyerPhoto(e.target.value)} placeholder="Ex: foto_oficial_pink.png ou link da foto" className="rounded-2xl bg-white/5 border-white/10 text-white h-12" />
+                          <Input value={flyerPhoto} onChange={e => setFlyerPhoto(e.target.value)} placeholder="Ex: foto_oficial_pink.png ou link da foto" className="rounded-2xl bg-white/5 border-white/10 text-white h-11 sm:h-12 text-sm" />
                         </div>
 
                         <div className="space-y-2">
                           <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400 flex items-center gap-1">
                             Vídeo para Animação / Painel (Nome do arquivo no Drive ou Link do GDrive) <span className="text-pink-500 font-bold">*</span>
                           </Label>
-                          <Input value={animationVideo} onChange={e => setAnimationVideo(e.target.value)} placeholder="Ex: painel_loop_dj.mp4 ou link do drive" className="rounded-2xl bg-white/5 border-white/10 text-white h-12" />
+                          <Input value={animationVideo} onChange={e => setAnimationVideo(e.target.value)} placeholder="Ex: painel_loop_dj.mp4 ou link do drive" className="rounded-2xl bg-white/5 border-white/10 text-white h-11 sm:h-12 text-sm" />
                         </div>
                       </motion.div>
                     )}
@@ -384,16 +384,16 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
 
                 {/* 4 - Música de Entrada */}
                 <div className="border-t border-white/5 pt-6 space-y-5">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-[11px] uppercase font-black tracking-widest text-slate-300 flex items-center gap-1.5 cursor-pointer" htmlFor="public-has-playlist">
-                      <span className="w-5 h-5 rounded bg-pink-500/20 text-pink-400 flex items-center justify-center font-bold text-[9px] mr-1">4</span>
-                      Escolher Track Especifica
+                  <div className="flex items-start sm:items-center justify-between gap-3">
+                    <Label className="text-[11px] uppercase font-black tracking-widest text-slate-300 flex items-center gap-1.5 cursor-pointer select-none" htmlFor="public-has-playlist">
+                      <span className="w-5 h-5 rounded bg-pink-500/20 text-pink-400 flex items-center justify-center font-bold text-[9px] shrink-0">4</span>
+                      <span className="leading-normal">Escolher Track Especifica</span>
                     </Label>
                     <Checkbox 
                       id="public-has-playlist" 
                       checked={hasPlaylist}
                       onCheckedChange={(checked) => setHasPlaylist(checked === true)}
-                      className="border-slate-500 data-[state=checked]:bg-pink-500 data-[state=checked]:border-pink-500"
+                      className="border-slate-500 data-[state=checked]:bg-pink-500 data-[state=checked]:border-pink-500 shrink-0 mt-0.5 sm:mt-0"
                     />
                   </div>
 
@@ -410,21 +410,21 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
                           <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400 flex items-center gap-1">
                             Nome da Música / Track <span className="text-pink-500 font-bold">*</span>
                           </Label>
-                          <Input value={musicName} onChange={e => setMusicName(e.target.value)} placeholder="Ex: Hear Me Now ou Out of Control" className="rounded-2xl bg-white/5 border-white/10 text-white h-12" />
+                          <Input value={musicName} onChange={e => setMusicName(e.target.value)} placeholder="Ex: Hear Me Now ou Out of Control" className="rounded-2xl bg-white/5 border-white/10 text-white h-11 sm:h-12 text-sm" />
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           <div className="space-y-2">
                             <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400 flex items-center gap-1">
                               Link da Música (Audio/YT/Spotify/Drive) <span className="text-pink-500 font-bold">*</span>
                             </Label>
-                            <Input value={musicUrl} onChange={e => setMusicUrl(e.target.value)} placeholder="Ex: link do Spotify, Youtube, SoundCloud..." className="rounded-2xl bg-white/5 border-white/10 text-white h-12" />
+                            <Input value={musicUrl} onChange={e => setMusicUrl(e.target.value)} placeholder="Ex: link do Spotify, Youtube, SoundCloud..." className="rounded-2xl bg-white/5 border-white/10 text-white h-11 sm:h-12 text-sm" />
                           </div>
                           <div className="space-y-2">
                             <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400 flex items-center gap-1">
                               Melhor Minuto / Duração para Corte (Opcional)
                             </Label>
-                            <Input value={musicDuration} onChange={e => setMusicDuration(e.target.value)} placeholder="Ex: De 01:20 a 01:45" className="rounded-2xl bg-white/5 border-white/10 text-white h-12" />
+                            <Input value={musicDuration} onChange={e => setMusicDuration(e.target.value)} placeholder="Ex: De 01:20 a 01:45" className="rounded-2xl bg-white/5 border-white/10 text-white h-11 sm:h-12 text-sm" />
                           </div>
                         </div>
                       </motion.div>
@@ -433,11 +433,11 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
                 </div>
 
                 {/* Submit button */}
-                <div className="border-t border-white/5 pt-8 flex">
+                <div className="border-t border-white/5 pt-6 sm:pt-8 flex">
                   <Button 
                     type="submit" 
                     disabled={saving} 
-                    className="w-full bg-pink-500 hover:bg-pink-600 text-white rounded-2xl h-14 font-black shadow-[0_0_20px_rgba(236,72,153,0.3)] hover:shadow-[0_0_30px_rgba(236,72,153,0.5)] transition-all uppercase tracking-widest text-xs flex items-center justify-center gap-2 group border-none"
+                    className="w-full bg-pink-500 hover:bg-pink-600 text-white rounded-2xl h-12 sm:h-14 font-black shadow-[0_0_20px_rgba(236,72,153,0.3)] hover:shadow-[0_0_30px_rgba(236,72,153,0.5)] transition-all uppercase tracking-widest text-xs flex items-center justify-center gap-2 group border-none"
                   >
                     {saving ? (
                       <>
