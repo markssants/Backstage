@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, Music, ExternalLink, Clock, Trash2, Loader2, Disc, Calendar, ShieldAlert, BadgeCheck, Pencil, Film, Image, Sparkles, User } from "lucide-react";
+import { Plus, Music, ExternalLink, Clock, Trash2, Loader2, Disc, Calendar, ShieldAlert, BadgeCheck, Pencil, Film, Image, Sparkles, User, Share2 } from "lucide-react";
 import { EventProject, UserProfile, DjAsset, ArtTask } from "../../types";
 import { collection, query, onSnapshot, addDoc, serverTimestamp, deleteDoc, doc, getDocs, limit, orderBy, updateDoc } from "firebase/firestore";
 import { db, handleFirestoreError } from "../../firebase";
@@ -435,6 +435,31 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                   </Label>
                   <Input value={newAsset.presskitUrl} onChange={e => setNewAsset({...newAsset, presskitUrl: e.target.value})} placeholder="Link com fotos e release" className="rounded-2xl bg-white/5 border-white/10 text-white h-12" />
                 </div>
+
+                {editingId && (
+                  <div className="bg-purple-500/10 border border-purple-500/20 p-4 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div className="space-y-0.5">
+                      <p className="text-[10px] uppercase font-black tracking-widest text-purple-400 font-extrabold">
+                        Link de Preenchimento Exclusivo para o DJ
+                      </p>
+                      <p className="text-[11px] text-slate-400">
+                        Envie este link para o próprio DJ preencher suas mídias diretamente, sem precisar de login ou visualizar outras partes do painel!
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        const shareUrl = `${window.location.origin}${window.location.pathname}?djShare=${event.id}_${editingId}`;
+                        navigator.clipboard.writeText(shareUrl);
+                        toast.success("Link exclusivo copiado com sucesso!");
+                      }}
+                      className="rounded-xl h-10 px-4 bg-purple-500 hover:bg-purple-600 text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 border-none shrink-0"
+                    >
+                      <Share2 className="w-3.5 h-3.5" />
+                      Copiar Link
+                    </Button>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
@@ -901,6 +926,20 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                   </div>
                 </div>
                   <div className="flex items-center gap-1">
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const shareUrl = `${window.location.origin}${window.location.pathname}?djShare=${event.id}_${asset.id}`;
+                        navigator.clipboard.writeText(shareUrl);
+                        toast.success(`Link de preenchimento para ${asset.name} copiado com sucesso!`);
+                      }} 
+                      className="text-slate-600 hover:text-emerald-400 hover:bg-white/5 rounded-full transition-colors animate-fade-in"
+                      title="Copiar Link de Envio para o DJ"
+                    >
+                      <Share2 className="w-4 h-4" />
+                    </Button>
                     <Button 
                       variant="ghost" 
                       size="icon" 

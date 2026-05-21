@@ -11,13 +11,17 @@ import { auth, db } from './firebase';
 import { UserProfile, UserRole } from './types';
 import { Dashboard } from './components/dashboard/Dashboard';
 import { RoleSelection } from './components/auth/RoleSelection';
+import { DjPublicForm } from './components/dj/DjPublicForm';
 import { Button } from '@/components/ui/button';
 import { LogIn, Loader2, Music, Palette, Calendar, Lock, ArrowLeft } from 'lucide-react';
 import { Toaster } from '@/components/ui/sonner';
-import { ThemeProvider } from 'next-themes';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
 import { Input } from '@/components/ui/input';
+
+function ThemeProvider({ children }: { children: React.ReactNode; [key: string]: any }) {
+  return <>{children}</>;
+}
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -27,6 +31,11 @@ export default function App() {
   const [loginLoading, setLoginLoading] = useState(false);
 
   useEffect(() => {
+    if (!auth || typeof auth.onIdTokenChanged !== 'function') {
+      console.warn("Firebase Auth is not fully configured or missing connection parameters.");
+      setLoading(false);
+      return;
+    }
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setUser(user);
       if (user) {
@@ -81,6 +90,32 @@ export default function App() {
     return (
       <div className="h-screen w-screen flex items-center justify-center bg-[#0a0518]">
         <Loader2 className="w-8 h-8 animate-spin text-pink-500" />
+      </div>
+    );
+  }
+
+  // Intercept for unauthenticated DJ Public Form
+  const queryParams = new URLSearchParams(window.location.search);
+  const djShare = queryParams.get('djShare');
+  let publicEventId = '';
+  let publicAssetId = '';
+  if (djShare) {
+    const parts = djShare.split('_');
+    if (parts.length >= 2) {
+      publicEventId = parts[0];
+      publicAssetId = parts.slice(1).join('_');
+    }
+  }
+
+  if (djShare && publicEventId && publicAssetId) {
+    return (
+      <div className="dark min-h-screen bg-[#0a0518] text-slate-100 overflow-hidden relative font-sans">
+        <div className="relative z-10 min-h-screen flex flex-col">
+          <ThemeProvider attribute="class" defaultTheme="dark">
+            <Toaster />
+            <DjPublicForm eventId={publicEventId} assetId={publicAssetId} />
+          </ThemeProvider>
+        </div>
       </div>
     );
   }

@@ -117,9 +117,15 @@ service cloud.firestore {
 
     // --- DJ Assets ---
     match /events/{eventId}/dj_assets/{assetId} {
-      allow read: if isEventMember(eventId);
-      allow create, update: if isEventMember(eventId) && 
+      allow get: if true;
+      allow list: if isEventMember(eventId);
+      allow create: if isEventMember(eventId) && 
         incoming().name is string && incoming().name.size() <= 100;
+      allow update: if isEventMember(eventId) || (
+        incoming().name == existing().name &&
+        (!('priority' in incoming()) || !('priority' in existing()) || incoming().priority == existing().priority) &&
+        (!('artDeadline' in incoming()) || !('artDeadline' in existing()) || incoming().artDeadline == existing().artDeadline)
+      );
       allow delete: if isEventMember(eventId);
     }
 

@@ -2,14 +2,15 @@ import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
 import { OperationType, FirestoreErrorInfo } from './types';
+import firebaseJson from '../firebase-applet-config.json';
 
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || firebaseJson.apiKey,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || firebaseJson.authDomain,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || firebaseJson.projectId,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || firebaseJson.storageBucket,
   messagingSenderId: "581432306990",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || firebaseJson.appId,
 };
 
 // Only initialize if we have the minimum required config
@@ -20,7 +21,7 @@ if (!hasRequiredConfig) {
 }
 
 const app = hasRequiredConfig ? initializeApp(firebaseConfig) : ({} as any);
-const dbId = import.meta.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID;
+const dbId = import.meta.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID || firebaseJson.firestoreDatabaseId;
 
 export const db = hasRequiredConfig 
   ? (dbId ? getFirestore(app, dbId) : getFirestore(app)) 
