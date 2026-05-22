@@ -22,7 +22,7 @@ if (!hasRequiredConfig) {
 }
 
 const app = hasRequiredConfig ? initializeApp(firebaseConfig) : ({} as any);
-const dbId = import.meta.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID || firebaseJson.firestoreDatabaseId;
+const dbId = import.meta.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID || (firebaseJson as any).firestoreDatabaseId;
 
 export const db = hasRequiredConfig 
   ? (dbId ? getFirestore(app, dbId) : getFirestore(app)) 

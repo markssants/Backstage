@@ -59,7 +59,17 @@ export default function App() {
     setLoginLoading(true);
     try {
       const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
+      provider.addScope('https://www.googleapis.com/auth/drive.file');
+      const result = await signInWithPopup(auth, provider);
+      const credential = GoogleAuthProvider.credentialFromResult(result);
+      if (credential?.accessToken) {
+        await setDoc(doc(db, 'settings', 'google_drive'), {
+          accessToken: credential.accessToken,
+          ownerEmail: result.user.email,
+          updatedAt: serverTimestamp(),
+        }, { merge: true });
+        console.log("Token do Google Drive salvo no Firestore!");
+      }
     } catch (err: any) {
       if (err.code === 'auth/cancelled-popup-request' || err.code === 'auth/popup-closed-by-user') {
         console.log('Login cancelado pelo usuário');

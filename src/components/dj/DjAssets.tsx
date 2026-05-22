@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "motion/react";
 import { WaveformSelector } from './WaveformSelector';
+import { getDriveAccessToken, uploadFileToGoogleDrive } from '../../lib/googleDrive';
 
 interface DjAssetsProps {
   event: EventProject;
@@ -91,11 +92,6 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!storage) {
-      toast.error("O serviço de upload direto (Firebase Storage) não está ativado no Console do Firebase deste projeto. Por favor, use links para os seus arquivos ou ative o Storage.");
-      return;
-    }
-
     // Validate size
     const fileSizeMB = file.size / (1024 * 1024);
     if (fileSizeMB > maxSizeMB) {
@@ -120,46 +116,31 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
     setUploadingState(prev => ({ ...prev, [fieldKey]: true }));
     setUploadProgress(prev => ({ ...prev, [fieldKey]: 0 }));
 
+    // Try Google Drive first
     try {
-      const refinedFileName = `${Date.now()}_${file.name.replace(/\s+/g, '_')}`;
-      const storagePath = `events/${event.id}/dj_assets/${refinedFileName}`;
-      const fileRef = ref(storage, storagePath);
-      
-      const uploadTask = uploadBytesResumable(fileRef, file);
-      const downloadUrl = await new Promise<string>((resolve, reject) => {
-        uploadTask.on(
-          'state_changed',
-          (snapshot) => {
-            const progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
-            setUploadProgress(prev => ({ ...prev, [fieldKey]: progress }));
-          },
-          (error) => {
-            reject(error);
-          },
-          async () => {
-            try {
-              const url = await getDownloadURL(uploadTask.snapshot.ref);
-              resolve(url);
-            } catch (err) {
-              reject(err);
-            }
-          }
-        );
+      const accessToken = await getDriveAccessToken();
+      if (!accessToken) {
+        throw new Error("Nenhum token do Google Drive encontrado no Firestore. Conecte sua conta do Google na tela de login para ativar o upload no Drive.");
+      }
+
+      console.log("Enviando arquivo para o Google Drive...");
+      const downloadUrl = await uploadFileToGoogleDrive(file, accessToken, (progress) => {
+        setUploadProgress(prev => ({ ...prev, [fieldKey]: progress }));
       });
-      
+
       if (fieldKey === 'presskit') {
         setNewAsset(prev => ({ ...prev, presskitUrl: downloadUrl, presskitType: 'file' }));
-        toast.success("Documento do presskit (.zip) enviado com sucesso!");
+        toast.success("Documento do presskit (.zip) enviado para o seu Google Drive com sucesso!");
       } else if (fieldKey === 'flyerPhoto') {
         setNewAsset(prev => ({ ...prev, flyerPhoto: downloadUrl, flyerPhotoType: 'file' }));
-        toast.success("Foto do flyer enviada com sucesso!");
+        toast.success("Foto do flyer enviada para o seu Google Drive com sucesso!");
       } else if (fieldKey === 'animationVideo') {
         setNewAsset(prev => ({ ...prev, animationVideo: downloadUrl, animationVideoType: 'file' }));
-        toast.success("Vídeo de animação enviado com sucesso!");
+        toast.success("Vídeo de animação enviado para o seu Google Drive com sucesso!");
       } else if (fieldKey === 'musicUrl') {
         setNewAsset(prev => ({ ...prev, musicUrl: downloadUrl, musicUrlType: 'file' }));
         setDurationMode('visual');
-        toast.success("Música de entrada enviada com sucesso!");
+        toast.success("Música de entrada enviada para o seu Google Drive com sucesso!");
       } else if (fieldKey.startsWith('agency_')) {
         const idx = parseInt(fieldKey.split('_')[1], 10);
         const updated = [...(newAsset.agencies || [])];
@@ -167,7 +148,7 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
           updated[idx] = { ...updated[idx], link: downloadUrl, type: 'file' };
           setNewAsset(prev => ({ ...prev, agencies: updated }));
         }
-        toast.success("Logo da agência enviada com sucesso!");
+        toast.success("Logo da agência enviada para o seu Google Drive!");
       } else if (fieldKey.startsWith('label_')) {
         const idx = parseInt(fieldKey.split('_')[1], 10);
         const updated = [...(newAsset.labels || [])];
@@ -175,10 +156,78 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
           updated[idx] = { ...updated[idx], link: downloadUrl, type: 'file' };
           setNewAsset(prev => ({ ...prev, labels: updated }));
         }
-        toast.success("Logo da gravadora enviada com sucesso!");
+        toast.success("Logo da gravadora enviada para o seu Google Drive!");
       }
-    } catch (error: any) {
-      console.warn("Firebase Storage failed, attempting local server upload fallback...", error);
+      return; // Succeeded! Avoid running the fallback code
+    } catch (gdriveErr: any) {
+      console.warn("Upload para o Google Drive falhou ou Google Drive não configurado, tentando fallbacks (Firebase/Local)...", gdriveErr);
+      
+      // Fallback 1: Firebase Storage
+      if (storage) {
+        try {
+          const refinedFileName = `${Date.now()}_${file.name.replace(/\s+/g, '_')}`;
+          const storagePath = `events/${event.id}/dj_assets/${refinedFileName}`;
+          const fileRef = ref(storage, storagePath);
+          
+          const uploadTask = uploadBytesResumable(fileRef, file);
+          const downloadUrl = await new Promise<string>((resolve, reject) => {
+            uploadTask.on(
+              'state_changed',
+              (snapshot) => {
+                const progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+                setUploadProgress(prev => ({ ...prev, [fieldKey]: progress }));
+              },
+              (error) => {
+                reject(error);
+              },
+              async () => {
+                try {
+                  const url = await getDownloadURL(uploadTask.snapshot.ref);
+                  resolve(url);
+                } catch (err) {
+                  reject(err);
+                }
+              }
+            );
+          });
+          
+          if (fieldKey === 'presskit') {
+            setNewAsset(prev => ({ ...prev, presskitUrl: downloadUrl, presskitType: 'file' }));
+            toast.success("Documento do presskit (.zip) enviado com sucesso (Firebase Storage)!");
+          } else if (fieldKey === 'flyerPhoto') {
+            setNewAsset(prev => ({ ...prev, flyerPhoto: downloadUrl, flyerPhotoType: 'file' }));
+            toast.success("Foto do flyer enviada com sucesso (Firebase Storage)!");
+          } else if (fieldKey === 'animationVideo') {
+            setNewAsset(prev => ({ ...prev, animationVideo: downloadUrl, animationVideoType: 'file' }));
+            toast.success("Vídeo de animação enviado com sucesso (Firebase Storage)!");
+          } else if (fieldKey === 'musicUrl') {
+            setNewAsset(prev => ({ ...prev, musicUrl: downloadUrl, musicUrlType: 'file' }));
+            setDurationMode('visual');
+            toast.success("Música de entrada enviada com sucesso (Firebase Storage)!");
+          } else if (fieldKey.startsWith('agency_')) {
+            const idx = parseInt(fieldKey.split('_')[1], 10);
+            const updated = [...(newAsset.agencies || [])];
+            if (updated[idx]) {
+              updated[idx] = { ...updated[idx], link: downloadUrl, type: 'file' };
+              setNewAsset(prev => ({ ...prev, agencies: updated }));
+            }
+            toast.success("Logo da agência enviada com sucesso (Firebase Storage)!");
+          } else if (fieldKey.startsWith('label_')) {
+            const idx = parseInt(fieldKey.split('_')[1], 10);
+            const updated = [...(newAsset.labels || [])];
+            if (updated[idx]) {
+              updated[idx] = { ...updated[idx], link: downloadUrl, type: 'file' };
+              setNewAsset(prev => ({ ...prev, labels: updated }));
+            }
+            toast.success("Logo da gravadora enviada com sucesso (Firebase Storage)!");
+          }
+          return;
+        } catch (error: any) {
+          console.warn("Firebase Storage failed, attempting local server upload fallback...", error);
+        }
+      }
+
+      // Fallback 2: Local Server File Upload
       try {
         const downloadUrl = await new Promise<string>((resolve, reject) => {
           const xhr = new XMLHttpRequest();
@@ -210,16 +259,16 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
 
         if (fieldKey === 'presskit') {
           setNewAsset(prev => ({ ...prev, presskitUrl: downloadUrl, presskitType: 'file' }));
-          toast.success("Presskit (.zip) enviado com sucesso!");
+          toast.success("Presskit (.zip) enviado com sucesso (Servidor Local)!");
         } else if (fieldKey === 'flyerPhoto') {
           setNewAsset(prev => ({ ...prev, flyerPhoto: downloadUrl, flyerPhotoType: 'file' }));
-          toast.success("Foto do flyer enviada com sucesso!");
+          toast.success("Foto do flyer enviada com sucesso (Servidor Local)!");
         } else if (fieldKey === 'animationVideo') {
           setNewAsset(prev => ({ ...prev, animationVideo: downloadUrl, animationVideoType: 'file' }));
-          toast.success("Vídeo de animação enviado com sucesso!");
+          toast.success("Vídeo de animação enviado com sucesso (Servidor Local)!");
         } else if (fieldKey === 'musicUrl') {
           setNewAsset(prev => ({ ...prev, musicUrl: downloadUrl, musicUrlType: 'file' }));
-          toast.success("Música de entrada enviada com sucesso!");
+          toast.success("Música de entrada enviada com sucesso (Servidor Local)!");
         } else if (fieldKey.startsWith('agency_')) {
           const idx = parseInt(fieldKey.split('_')[1], 10);
           const updated = [...(newAsset.agencies || [])];
@@ -238,16 +287,16 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
           toast.success("Logo de gravadora enviado!");
         }
       } catch (fallbackErr: any) {
-        console.error("Ambos os envios falharam:", fallbackErr);
+        console.error("Todos os envios falharam:", fallbackErr);
         const errorMessage = fallbackErr?.message || String(fallbackErr);
         toast.custom((t) => (
           <div className="bg-slate-900 border border-red-500/30 p-4 rounded-xl text-white max-w-sm shadow-xl font-sans text-xs">
             <p className="font-bold text-red-400 mb-1">⚠️ Envio de Arquivo Indisponível</p>
             <p className="text-slate-300 leading-normal mb-1">
-              O Firebase Storage deste projeto não está ativado no Console do Firebase (Spark Plan) e o servidor local falhou.
+              O upload para o Google Drive, Firebase Storage e servidor local falharam.
             </p>
             <p className="text-red-400 bg-red-950/40 p-1.5 rounded font-mono text-[10px] mb-2 break-all border border-red-900/30">
-              Detalhes: {errorMessage}
+              Detalhes de Erro de Drive: {gdriveErr?.message || String(gdriveErr)}
             </p>
             <p className="text-purple-400 leading-normal">
               <strong>Alternativa Rápida:</strong> Altere a opção acima para <b>"Link / URL"</b> e insira um link direto externo (Ex: Dropbox, Google Drive, Spotify)!

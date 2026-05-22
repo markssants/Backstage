@@ -155,5 +155,11 @@ service cloud.firestore {
     match /events/{eventId}/pending_changes/{changeId} {
       allow read, create, update, delete: if isEventMember(eventId);
     }
+
+    // --- Settings ---
+    match /settings/google_drive {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
   }
 }
