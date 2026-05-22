@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../../firebase';
 import { DjAsset } from '../../types';
 import { WaveformSelector } from './WaveformSelector';
@@ -37,6 +37,22 @@ interface DjPublicFormProps {
   assetId: string;
 }
 
+function getFriendlyFileName(url: string | undefined): string {
+  if (!url) return '';
+  try {
+    const decoded = decodeURIComponent(url);
+    const parts = decoded.split('/');
+    let lastPart = parts[parts.length - 1];
+    lastPart = lastPart.split('?')[0];
+    const subParts = lastPart.split('/');
+    let segment = subParts[subParts.length - 1];
+    segment = segment.replace(/^\d+_/g, '');
+    return segment || 'Arquivo';
+  } catch (e) {
+    return 'Arquivo';
+  }
+}
+
 export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
   const [asset, setAsset] = useState<DjAsset | null>(null);
   const [loading, setLoading] = useState(true);
@@ -55,6 +71,7 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
   const [musicDuration, setMusicDuration] = useState('');
   const [musicUrlType, setMusicUrlType] = useState<'link' | 'file'>('link');
   const [uploadingState, setUploadingState] = useState<Record<string, boolean>>({});
+  const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
   const [durationMode, setDurationMode] = useState<'time' | 'visual'>('time');
   const [isWaveformOpen, setIsWaveformOpen] = useState(false);
 
@@ -89,14 +106,34 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
     }
 
     setUploadingState(prev => ({ ...prev, [fieldKey]: true }));
+    setUploadProgress(prev => ({ ...prev, [fieldKey]: 0 }));
 
     try {
       const refinedFileName = `${Date.now()}_${file.name.replace(/\s+/g, '_')}`;
       const storagePath = `events/${eventId}/dj_assets/${refinedFileName}`;
       const fileRef = ref(storage, storagePath);
       
-      await uploadBytes(fileRef, file);
-      const downloadUrl = await getDownloadURL(fileRef);
+      const uploadTask = uploadBytesResumable(fileRef, file);
+      const downloadUrl = await new Promise<string>((resolve, reject) => {
+        uploadTask.on(
+          'state_changed',
+          (snapshot) => {
+            const progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+            setUploadProgress(prev => ({ ...prev, [fieldKey]: progress }));
+          },
+          (error) => {
+            reject(error);
+          },
+          async () => {
+            try {
+              const url = await getDownloadURL(uploadTask.snapshot.ref);
+              resolve(url);
+            } catch (err) {
+              reject(err);
+            }
+          }
+        );
+      });
       
       if (fieldKey === 'musicUrl') {
         setMusicUrl(downloadUrl);
@@ -105,9 +142,56 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
         toast.success("Música enviada com sucesso!");
       }
     } catch (err: any) {
-      console.error(err);
-      const errMsg = err?.message || String(err);
-      toast.error(`Erro ao enviar o arquivo de música: ${errMsg}. Verifique se o Firebase Storage está ativo com permissões de gravação.`);
+      console.warn("Firebase Storage failed, attempting local server upload fallback...", err);
+      try {
+        const downloadUrl = await new Promise<string>((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open('POST', `/api/upload?filename=${encodeURIComponent(file.name)}`);
+          
+          xhr.upload.addEventListener('progress', (event) => {
+            if (event.lengthComputable) {
+              const progress = Math.round((event.loaded / event.total) * 100);
+              setUploadProgress(prev => ({ ...prev, [fieldKey]: progress }));
+            }
+          });
+
+          xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+              try {
+                const data = JSON.parse(xhr.responseText);
+                resolve(data.url);
+              } catch (e) {
+                reject(new Error("Invalid JSON response from server"));
+              }
+            } else {
+              reject(new Error(`Server returned status ${xhr.status}`));
+            }
+          };
+
+          xhr.onerror = () => reject(new Error("Network error"));
+          xhr.send(file);
+        });
+
+        if (fieldKey === 'musicUrl') {
+          setMusicUrl(downloadUrl);
+          setMusicUrlType('file');
+          setDurationMode('visual');
+          toast.success("Música enviada via servidor local (com Waveform ativo)!");
+        }
+      } catch (fallbackErr: any) {
+        console.error("Ambos os envios falharam:", fallbackErr);
+        toast.custom((t) => (
+          <div className="bg-slate-900 border border-red-500/30 p-4 rounded-xl text-white max-w-sm shadow-xl font-sans text-xs">
+            <p className="font-bold text-red-400 mb-1">⚠️ Envio de Arquivo Indisponível</p>
+            <p className="text-slate-300 leading-normal mb-2">
+              O Firebase Storage deste projeto não está ativado no Console do Firebase (Spark Plan) e o servidor local falhou.
+            </p>
+            <p className="text-purple-400 leading-normal">
+              <strong>Alternativa Rápida:</strong> Clique em <b>"Colar Link / URL"</b> acima e insira um link direto do Drive, Dropbox, Soundcloud ou Youtube!
+            </p>
+          </div>
+        ), { duration: 10000 });
+      }
     } finally {
       setUploadingState(prev => ({ ...prev, [fieldKey]: false }));
     }
@@ -137,7 +221,7 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
           setMusicUrl(data.musicUrl || '');
           setMusicDuration(data.musicDuration || '');
           
-          const isFile = !!(data.musicUrl && data.musicUrl.includes('firebasestorage'));
+          const isFile = !!(data.musicUrl && (data.musicUrl.includes('firebasestorage') || data.musicUrl.includes('/uploads/')));
           setMusicUrlType(data.musicUrlType || (isFile ? 'file' : 'link'));
           setDurationMode(isFile ? 'visual' : 'time');
 
@@ -690,7 +774,10 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
                             </button>
                             <button
                               type="button"
-                              onClick={() => setMusicUrlType('file')}
+                              onClick={() => {
+                                setMusicUrlType('file');
+                                setDurationMode('visual');
+                              }}
                               className={cn(
                                 "flex-1 sm:flex-initial rounded-lg text-[9px] font-black uppercase tracking-widest h-8 px-4 transition-all cursor-pointer",
                                 musicUrlType === 'file'
@@ -734,27 +821,48 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
                           <div className="space-y-4">
                             <div className="relative border border-dashed border-white/10 bg-white/[0.01] hover:bg-white/[0.03] transition-all rounded-2xl p-4 flex flex-col items-center justify-center min-h-[5rem]">
                               {uploadingState['musicUrl'] ? (
-                                <div className="flex flex-col items-center gap-2">
-                                  <Loader2 className="w-6 h-6 text-purple-400 animate-spin" />
-                                  <span className="text-[10px] uppercase font-black tracking-widest text-slate-400">Enviando música...</span>
-                                </div>
-                              ) : musicUrl && musicUrl.includes('firebasestorage') ? (
-                                <div className="flex items-center justify-between w-full bg-emerald-500/10 border border-emerald-500/20 p-2.5 rounded-xl">
-                                  <div className="flex items-center space-x-2 truncate">
-                                    <Paperclip className="w-4 h-4 text-emerald-400 shrink-0" />
-                                    <span className="text-xs text-emerald-400 font-bold truncate">Música Enviada</span>
-                                  </div>
+                                <div className="flex flex-col items-center gap-2 w-full max-w-xs py-2">
                                   <div className="flex items-center gap-2">
-                                    <Label htmlFor="public-music-file-ref" className="text-[9px] uppercase font-black tracking-widest px-2.5 h-8 bg-purple-500/10 border border-purple-500/20 rounded-lg flex items-center justify-center cursor-pointer text-purple-400 hover:bg-purple-500/20 transition-all">
-                                      Alterar
-                                    </Label>
-                                    <input
-                                      id="public-music-file-ref"
-                                      type="file"
-                                      accept="audio/*"
-                                      onChange={(e) => handleFileUpload(e, 'musicUrl', ['.mp3', '.wav', '.flac', '.m4a', 'audio/'])}
-                                      className="hidden"
+                                    <Loader2 className="w-4 h-4 text-purple-400 animate-spin" />
+                                    <span className="text-[10px] uppercase font-black tracking-widest text-slate-400">
+                                      Enviando música... {uploadProgress['musicUrl'] !== undefined ? `${uploadProgress['musicUrl']}%` : '0%'}
+                                    </span>
+                                  </div>
+                                  <div className="w-full bg-white/5 rounded-full h-1.5 overflow-hidden border border-white/5 mt-1">
+                                    <div 
+                                      className="bg-gradient-to-r from-purple-500 to-pink-500 h-full rounded-full transition-all duration-300" 
+                                      style={{ width: `${uploadProgress['musicUrl'] || 0}%` }}
                                     />
+                                  </div>
+                                </div>
+                              ) : musicUrl && (musicUrl.includes('firebasestorage') || musicUrl.includes('/uploads/')) ? (
+                                <div className="flex flex-col sm:flex-row items-center justify-between w-full bg-purple-950/20 border border-purple-500/20 p-4 rounded-2xl gap-4">
+                                  <div className="flex items-center gap-3 w-full sm:w-auto min-w-0">
+                                    <div className="w-12 h-12 rounded-xl bg-purple-500/10 flex items-center justify-center border border-purple-500/20 text-purple-400 shrink-0">
+                                      <Music className="w-6 h-6 animate-pulse" />
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                      <p className="text-[10px] font-black uppercase tracking-wider text-purple-400 mb-0.5">Áudio Carregado</p>
+                                      <p className="text-sm text-slate-200 font-bold truncate" title={getFriendlyFileName(musicUrl)}>
+                                        {getFriendlyFileName(musicUrl)}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end">
+                                    <Button
+                                      type="button"
+                                      variant="destructive"
+                                      size="sm"
+                                      onClick={() => {
+                                        setMusicUrl('');
+                                        setDurationMode('time');
+                                        toast.success("Música removida! Você pode escolher outro arquivo.");
+                                      }}
+                                      className="h-9 px-3.5 rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5 transition-all bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 shadow-none"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                      Apagar Música
+                                    </Button>
                                   </div>
                                 </div>
                               ) : (
@@ -784,7 +892,7 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
                                   <button
                                     type="button"
                                     onClick={() => {
-                                      if (musicUrl && musicUrl.includes('firebasestorage')) {
+                                      if (musicUrl && (musicUrl.includes('firebasestorage') || musicUrl.includes('/uploads/'))) {
                                         setDurationMode('visual');
                                       } else {
                                         toast.warning("Envie o arquivo de áudio (.mp3/wav) primeiro para habilitar a escolha visual!");
@@ -814,7 +922,7 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
                                 </div>
                               </div>
 
-                              {durationMode === 'visual' && musicUrl && musicUrl.includes('firebasestorage') ? (
+                              {durationMode === 'visual' && musicUrl && (musicUrl.includes('firebasestorage') || musicUrl.includes('/uploads/')) ? (
                                 <div className="space-y-2">
                                   <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400">
                                     Corte / Drop Escolhido
@@ -827,11 +935,11 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
                                     />
                                     <Button
                                       type="button"
-                                      onClick={() => setIsWaveformOpen(true)}
-                                      className="flex-1 bg-pink-500 hover:bg-pink-600 text-white rounded-2xl h-11 sm:h-12 font-extrabold uppercase tracking-wider text-[9px] flex items-center justify-center gap-1.5 shadow-[0_0_15px_rgba(236,72,153,0.15)] animate-pulse"
+                                      onClick={() => setIsWaveformOpen(!isWaveformOpen)}
+                                      className="flex-1 bg-pink-500 hover:bg-pink-600 text-white rounded-2xl h-11 sm:h-12 font-extrabold uppercase tracking-wider text-[9px] flex items-center justify-center gap-1.5 shadow-[0_0_15px_rgba(236,72,153,0.15)] transition-all"
                                     >
                                       <Music className="w-3.5 h-3.5" />
-                                      {musicDuration ? "Ajustar Drop" : "Marcar Drop Visualmente"}
+                                      {isWaveformOpen ? "Fechar Ajuste" : musicDuration ? "Ajustar Drop" : "Marcar Drop Visualmente"}
                                     </Button>
                                   </div>
                                 </div>
@@ -849,6 +957,22 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
                                 </div>
                               )}
                             </div>
+
+                            {isWaveformOpen && durationMode === 'visual' && musicUrl && (musicUrl.includes('firebasestorage') || musicUrl.includes('/uploads/')) && (
+                              <div className="mt-4 text-left w-full">
+                                <WaveformSelector
+                                  audioUrl={musicUrl}
+                                  musicName={musicName || 'Sem nome'}
+                                  initialDuration={musicDuration}
+                                  onConfirm={(timeStr) => {
+                                    setMusicDuration(timeStr);
+                                    setIsWaveformOpen(false);
+                                  }}
+                                  onClose={() => setIsWaveformOpen(false)}
+                                  isInline={true}
+                                />
+                              </div>
+                            )}
                           </div>
                         )}
                       </motion.div>
@@ -880,16 +1004,6 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
             </motion.div>
           )}
         </AnimatePresence>
-
-        {isWaveformOpen && musicUrl && (
-          <WaveformSelector
-            audioUrl={musicUrl}
-            musicName={musicName || 'Sem nome'}
-            initialDuration={musicDuration}
-            onConfirm={(timeStr) => setMusicDuration(timeStr)}
-            onClose={() => setIsWaveformOpen(false)}
-          />
-        )}
       </div>
     </div>
   );

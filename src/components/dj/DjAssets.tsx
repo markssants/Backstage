@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Plus, Music, ExternalLink, Clock, Trash2, Loader2, Disc, Calendar, ShieldAlert, BadgeCheck, Pencil, Film, Image, Sparkles, User, Share2, Upload, Paperclip } from "lucide-react";
 import { EventProject, UserProfile, DjAsset, ArtTask } from "../../types";
 import { collection, query, onSnapshot, addDoc, serverTimestamp, deleteDoc, doc, getDocs, limit, orderBy, updateDoc } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { db, storage, handleFirestoreError } from "../../firebase";
 import { OperationType } from "../../types";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
@@ -19,6 +19,22 @@ import { WaveformSelector } from './WaveformSelector';
 interface DjAssetsProps {
   event: EventProject;
   profile: UserProfile;
+}
+
+function getFriendlyFileName(url: string | undefined): string {
+  if (!url) return '';
+  try {
+    const decoded = decodeURIComponent(url);
+    const parts = decoded.split('/');
+    let lastPart = parts[parts.length - 1];
+    lastPart = lastPart.split('?')[0];
+    const subParts = lastPart.split('/');
+    let segment = subParts[subParts.length - 1];
+    segment = segment.replace(/^\d+_/g, '');
+    return segment || 'Arquivo';
+  } catch (e) {
+    return 'Arquivo';
+  }
 }
 
 export function DjAssets({ event, profile }: DjAssetsProps) {
@@ -67,6 +83,7 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
   const [hasPlaylist, setHasPlaylist] = useState(false);
   const [hasRecordLabel, setHasRecordLabel] = useState(false);
   const [uploadingState, setUploadingState] = useState<Record<string, boolean>>({});
+  const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
   const [durationMode, setDurationMode] = useState<'time' | 'visual'>('time');
   const [isWaveformOpen, setIsWaveformOpen] = useState(false);
 
@@ -101,14 +118,34 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
     }
 
     setUploadingState(prev => ({ ...prev, [fieldKey]: true }));
+    setUploadProgress(prev => ({ ...prev, [fieldKey]: 0 }));
 
     try {
       const refinedFileName = `${Date.now()}_${file.name.replace(/\s+/g, '_')}`;
       const storagePath = `events/${event.id}/dj_assets/${refinedFileName}`;
       const fileRef = ref(storage, storagePath);
       
-      await uploadBytes(fileRef, file);
-      const downloadUrl = await getDownloadURL(fileRef);
+      const uploadTask = uploadBytesResumable(fileRef, file);
+      const downloadUrl = await new Promise<string>((resolve, reject) => {
+        uploadTask.on(
+          'state_changed',
+          (snapshot) => {
+            const progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+            setUploadProgress(prev => ({ ...prev, [fieldKey]: progress }));
+          },
+          (error) => {
+            reject(error);
+          },
+          async () => {
+            try {
+              const url = await getDownloadURL(uploadTask.snapshot.ref);
+              resolve(url);
+            } catch (err) {
+              reject(err);
+            }
+          }
+        );
+      });
       
       if (fieldKey === 'presskit') {
         setNewAsset(prev => ({ ...prev, presskitUrl: downloadUrl, presskitType: 'file' }));
@@ -121,6 +158,7 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
         toast.success("Vídeo de animação enviado com sucesso!");
       } else if (fieldKey === 'musicUrl') {
         setNewAsset(prev => ({ ...prev, musicUrl: downloadUrl, musicUrlType: 'file' }));
+        setDurationMode('visual');
         toast.success("Música de entrada enviada com sucesso!");
       } else if (fieldKey.startsWith('agency_')) {
         const idx = parseInt(fieldKey.split('_')[1], 10);
@@ -140,9 +178,79 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
         toast.success("Logo da gravadora enviada com sucesso!");
       }
     } catch (error: any) {
-      console.error("Erro no upload do arquivo:", error);
-      const errMsg = error?.message || String(error);
-      toast.error(`Erro ao enviar o arquivo: ${errMsg}. Certifique-se de que o Firebase Storage está ativado nas configurações do console e que as regras de gravação permitem o upload.`);
+      console.warn("Firebase Storage failed, attempting local server upload fallback...", error);
+      try {
+        const downloadUrl = await new Promise<string>((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open('POST', `/api/upload?filename=${encodeURIComponent(file.name)}`);
+          
+          xhr.upload.addEventListener('progress', (event) => {
+            if (event.lengthComputable) {
+              const progress = Math.round((event.loaded / event.total) * 100);
+              setUploadProgress(prev => ({ ...prev, [fieldKey]: progress }));
+            }
+          });
+
+          xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+              try {
+                const data = JSON.parse(xhr.responseText);
+                resolve(data.url);
+              } catch (e) {
+                reject(new Error("Invalid JSON response from server"));
+              }
+            } else {
+              reject(new Error(`Server returned status ${xhr.status}`));
+            }
+          };
+
+          xhr.onerror = () => reject(new Error("Network error"));
+          xhr.send(file);
+        });
+
+        if (fieldKey === 'presskit') {
+          setNewAsset(prev => ({ ...prev, presskitUrl: downloadUrl, presskitType: 'file' }));
+          toast.success("Presskit (.zip) enviado com sucesso!");
+        } else if (fieldKey === 'flyerPhoto') {
+          setNewAsset(prev => ({ ...prev, flyerPhoto: downloadUrl, flyerPhotoType: 'file' }));
+          toast.success("Foto do flyer enviada com sucesso!");
+        } else if (fieldKey === 'animationVideo') {
+          setNewAsset(prev => ({ ...prev, animationVideo: downloadUrl, animationVideoType: 'file' }));
+          toast.success("Vídeo de animação enviado com sucesso!");
+        } else if (fieldKey === 'musicUrl') {
+          setNewAsset(prev => ({ ...prev, musicUrl: downloadUrl, musicUrlType: 'file' }));
+          toast.success("Música de entrada enviada com sucesso!");
+        } else if (fieldKey.startsWith('agency_')) {
+          const idx = parseInt(fieldKey.split('_')[1], 10);
+          const updated = [...(newAsset.agencies || [])];
+          if (updated[idx]) {
+            updated[idx] = { ...updated[idx], link: downloadUrl, type: 'file' };
+            setNewAsset(prev => ({ ...prev, agencies: updated }));
+          }
+          toast.success("Logo de agência de booking enviado!");
+        } else if (fieldKey.startsWith('label_')) {
+          const idx = parseInt(fieldKey.split('_')[1], 10);
+          const updated = [...(newAsset.labels || [])];
+          if (updated[idx]) {
+            updated[idx] = { ...updated[idx], link: downloadUrl, type: 'file' };
+            setNewAsset(prev => ({ ...prev, labels: updated }));
+          }
+          toast.success("Logo de gravadora enviado!");
+        }
+      } catch (fallbackErr: any) {
+        console.error("Ambos os envios falharam:", fallbackErr);
+        toast.custom((t) => (
+          <div className="bg-slate-900 border border-red-500/30 p-4 rounded-xl text-white max-w-sm shadow-xl font-sans text-xs">
+            <p className="font-bold text-red-400 mb-1">⚠️ Envio de Arquivo Indisponível</p>
+            <p className="text-slate-300 leading-normal mb-2">
+              O Firebase Storage deste projeto não está ativado no Console do Firebase (Spark Plan) e o servidor local falhou.
+            </p>
+            <p className="text-purple-400 leading-normal">
+              <strong>Alternativa Rápida:</strong> Altere a opção acima para <b>"Link / URL"</b> e insira um link direto externo (Ex: Dropbox, Google Drive, Spotify)!
+            </p>
+          </div>
+        ), { duration: 10000 });
+      }
     } finally {
       setUploadingState(prev => ({ ...prev, [fieldKey]: false }));
     }
@@ -163,23 +271,23 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
     const ags = asset.agencies && asset.agencies.length > 0
       ? asset.agencies.map(a => ({ 
           ...a, 
-          type: a.type || (a.link && a.link.includes('firebasestorage') ? 'file' : 'link') 
+          type: a.type || (a.link && (a.link.includes('firebasestorage') || a.link.includes('/uploads/')) ? 'file' : 'link') 
         }))
       : [{ name: asset.agencyInfo || '', link: '', type: 'link' as const }];
     
     const labs = asset.labels && asset.labels.length > 0
       ? asset.labels.map(l => ({ 
           ...l, 
-          type: l.type || (l.link && l.link.includes('firebasestorage') ? 'file' : 'link') 
+          type: l.type || (l.link && (l.link.includes('firebasestorage') || l.link.includes('/uploads/')) ? 'file' : 'link') 
         }))
       : [{ name: asset.labelInfo || '', link: '', type: 'link' as const }];
 
     setNewAsset({ 
       ...asset,
-      presskitType: asset.presskitType || (asset.presskitUrl && asset.presskitUrl.includes('firebasestorage') ? 'file' : 'link'),
-      flyerPhotoType: asset.flyerPhotoType || (asset.flyerPhoto && asset.flyerPhoto.includes('firebasestorage') ? 'file' : 'link'),
-      animationVideoType: asset.animationVideoType || (asset.animationVideo && asset.animationVideo.includes('firebasestorage') ? 'file' : 'link'),
-      musicUrlType: asset.musicUrlType || (asset.musicUrl && asset.musicUrl.includes('firebasestorage') ? 'file' : 'link'),
+      presskitType: asset.presskitType || (asset.presskitUrl && (asset.presskitUrl.includes('firebasestorage') || asset.presskitUrl.includes('/uploads/')) ? 'file' : 'link'),
+      flyerPhotoType: asset.flyerPhotoType || (asset.flyerPhoto && (asset.flyerPhoto.includes('firebasestorage') || asset.flyerPhoto.includes('/uploads/')) ? 'file' : 'link'),
+      animationVideoType: asset.animationVideoType || (asset.animationVideo && (asset.animationVideo.includes('firebasestorage') || asset.animationVideo.includes('/uploads/')) ? 'file' : 'link'),
+      musicUrlType: asset.musicUrlType || (asset.musicUrl && (asset.musicUrl.includes('firebasestorage') || asset.musicUrl.includes('/uploads/')) ? 'file' : 'link'),
       visualMaterialType: asset.visualMaterialType || 'both',
       agencies: ags,
       labels: labs
@@ -572,27 +680,47 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                   ) : (
                     <div className="relative border border-dashed border-white/10 bg-white/[0.01] hover:bg-white/[0.03] transition-all rounded-2xl p-4 flex flex-col items-center justify-center min-h-[5rem]">
                       {uploadingState['presskit'] ? (
-                        <div className="flex flex-col items-center gap-2">
-                          <Loader2 className="w-6 h-6 text-purple-400 animate-spin" />
-                          <span className="text-[10px] uppercase font-black tracking-widest text-slate-400">Enviando arquivo (.zip)...</span>
-                        </div>
-                      ) : newAsset.presskitUrl && newAsset.presskitUrl.includes('firebasestorage') ? (
-                        <div className="flex items-center justify-between w-full bg-emerald-500/10 border border-emerald-500/20 p-2.5 rounded-xl">
-                          <div className="flex items-center space-x-2 truncate">
-                            <Paperclip className="w-4 h-4 text-emerald-400 shrink-0" />
-                            <span className="text-xs text-emerald-400 font-bold truncate">Arquivo Presskit Pronto</span>
-                          </div>
+                        <div className="flex flex-col items-center gap-2 w-full max-w-xs py-2">
                           <div className="flex items-center gap-2">
-                            <Label htmlFor="presskit-file-ref" className="text-[9px] uppercase font-black tracking-widest px-2.5 h-8 bg-purple-500/10 border border-purple-500/20 rounded-lg flex items-center justify-center cursor-pointer text-purple-400 hover:bg-purple-500/20 transition-all">
-                              Alterar
-                            </Label>
-                            <input
-                              id="presskit-file-ref"
-                              type="file"
-                              accept=".zip"
-                              onChange={(e) => handleFileUpload(e, 'presskit', ['.zip'])}
-                              className="hidden"
+                            <Loader2 className="w-4 h-4 text-purple-400 animate-spin" />
+                            <span className="text-[10px] uppercase font-black tracking-widest text-slate-400">
+                              Enviando arquivo (.zip)... {uploadProgress['presskit'] !== undefined ? `${uploadProgress['presskit']}%` : '0%'}
+                            </span>
+                          </div>
+                          <div className="w-full bg-white/5 rounded-full h-1.5 overflow-hidden border border-white/5 mt-1">
+                            <div 
+                              className="bg-gradient-to-r from-purple-500 to-pink-500 h-full rounded-full transition-all duration-300" 
+                              style={{ width: `${uploadProgress['presskit'] || 0}%` }}
                             />
+                          </div>
+                        </div>
+                      ) : newAsset.presskitUrl && (newAsset.presskitUrl.includes('firebasestorage') || newAsset.presskitUrl.includes('/uploads/')) ? (
+                        <div className="flex flex-col sm:flex-row items-center justify-between w-full bg-purple-950/20 border border-purple-500/20 p-4 rounded-2xl gap-4">
+                          <div className="flex items-center gap-3 w-full sm:w-auto min-w-0">
+                            <div className="w-12 h-12 rounded-xl bg-purple-500/10 flex items-center justify-center border border-purple-500/20 text-purple-400 shrink-0">
+                              <Paperclip className="w-6 h-6" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-[10px] font-black uppercase tracking-wider text-purple-400 mb-0.5">Presskit (.zip) Carregado</p>
+                              <p className="text-sm text-slate-200 font-bold truncate" title={getFriendlyFileName(newAsset.presskitUrl)}>
+                                {getFriendlyFileName(newAsset.presskitUrl)}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end">
+                            <Button
+                              type="button"
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => {
+                                setNewAsset(prev => ({ ...prev, presskitUrl: '' }));
+                                toast.success("Presskit removido. Você pode carregar outro arquivo!");
+                              }}
+                              className="h-9 px-3.5 rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5 transition-all bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 shadow-none"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              Apagar Presskit
+                            </Button>
                           </div>
                         </div>
                       ) : (
@@ -850,27 +978,52 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                                 ) : (
                                   <div className="relative border border-dashed border-white/10 bg-white/[0.01] hover:bg-white/[0.03] transition-all rounded-xl p-3 flex flex-col items-center justify-center min-h-[4rem]">
                                     {uploadingState[`agency_${idx}`] ? (
-                                      <div className="flex items-center gap-2">
-                                        <Loader2 className="w-4 h-4 text-purple-400 animate-spin" />
-                                        <span className="text-[9px] uppercase font-black tracking-widest text-slate-400">Enviando imagem...</span>
-                                      </div>
-                                    ) : agency.link && agency.link.includes('firebasestorage') ? (
-                                      <div className="flex items-center justify-between w-full bg-emerald-500/10 border border-emerald-500/20 p-2 rounded-lg">
-                                        <div className="flex items-center space-x-2 truncate">
-                                          <Paperclip className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                                          <span className="text-[10px] text-emerald-400 font-bold truncate">Logo Carregado</span>
+                                      <div className="flex flex-col items-center gap-1.5 w-full max-w-xs py-1">
+                                        <div className="flex items-center gap-1.5">
+                                          <Loader2 className="w-3.5 h-3.5 text-purple-400 animate-spin" />
+                                          <span className="text-[9px] uppercase font-black tracking-widest text-slate-400">
+                                            Enviando imagem... {uploadProgress[`agency_${idx}`] !== undefined ? `${uploadProgress[`agency_${idx}`]}%` : '0%'}
+                                          </span>
                                         </div>
-                                        <div className="flex items-center gap-1.5 item-center">
-                                          <Label htmlFor={`agency-file-${idx}`} className="text-[8px] uppercase font-black tracking-widest px-2 h-7 bg-purple-500/10 border border-purple-500/20 rounded flex items-center justify-center cursor-pointer text-purple-400 hover:bg-purple-500/20 transition-all">
-                                            Alterar
-                                          </Label>
-                                          <input
-                                            id={`agency-file-${idx}`}
-                                            type="file"
-                                            accept="image/*"
-                                            onChange={(e) => handleFileUpload(e, `agency_${idx}`, ['.png', '.jpg', '.jpeg', 'image/'])}
-                                            className="hidden"
+                                        <div className="w-full bg-white/5 rounded-full h-1 overflow-hidden border border-white/5">
+                                          <div 
+                                            className="bg-gradient-to-r from-purple-500 to-pink-500 h-full rounded-full transition-all duration-300" 
+                                            style={{ width: `${uploadProgress[`agency_${idx}`] || 0}%` }}
                                           />
+                                        </div>
+                                      </div>
+                                    ) : agency.link && (agency.link.includes('firebasestorage') || agency.link.includes('/uploads/')) ? (
+                                      <div className="flex flex-col sm:flex-row items-center justify-between w-full bg-purple-950/20 border border-purple-500/20 p-2.5 rounded-xl gap-3">
+                                        <div className="flex items-center gap-2.5 w-full sm:w-auto min-w-0">
+                                          <img 
+                                            src={agency.link} 
+                                            alt="Logo da Assessoria" 
+                                            className="w-8 h-8 object-cover rounded bg-white/5 border border-white/10 shrink-0"
+                                            referrerPolicy="no-referrer"
+                                          />
+                                          <div className="min-w-0 flex-1">
+                                            <p className="text-[8px] font-black uppercase tracking-wider text-purple-400 mb-0.5">Logo Carregado</p>
+                                            <p className="text-xs text-slate-200 font-bold truncate" title={getFriendlyFileName(agency.link)}>
+                                              {getFriendlyFileName(agency.link)}
+                                            </p>
+                                          </div>
+                                        </div>
+                                        <div className="flex items-center gap-1.5 shrink-0">
+                                          <Button
+                                            type="button"
+                                            variant="destructive"
+                                            size="sm"
+                                            onClick={() => {
+                                              const updated = [...newAsset.agencies!];
+                                              updated[idx] = { ...updated[idx], link: '' };
+                                              setNewAsset({ ...newAsset, agencies: updated });
+                                              toast.success("Logo removido!");
+                                            }}
+                                            className="h-7 px-2.5 rounded-lg text-[8px] font-black uppercase tracking-widest flex items-center gap-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 shadow-none"
+                                          >
+                                            <Trash2 className="w-3 h-3" />
+                                            Apagar
+                                          </Button>
                                         </div>
                                       </div>
                                     ) : (
@@ -1031,27 +1184,52 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                                       ) : (
                                         <div className="relative border border-dashed border-white/10 bg-white/[0.01] hover:bg-white/[0.03] transition-all rounded-xl p-3 flex flex-col items-center justify-center min-h-[4rem]">
                                           {uploadingState[`label_${idx}`] ? (
-                                            <div className="flex items-center gap-2">
-                                              <Loader2 className="w-4 h-4 text-purple-400 animate-spin" />
-                                              <span className="text-[9px] uppercase font-black tracking-widest text-slate-400">Enviando imagem...</span>
-                                            </div>
-                                          ) : label.link && label.link.includes('firebasestorage') ? (
-                                            <div className="flex items-center justify-between w-full bg-emerald-500/10 border border-emerald-500/20 p-2 rounded-lg">
-                                              <div className="flex items-center space-x-2 truncate">
-                                                <Paperclip className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                                                <span className="text-[10px] text-emerald-400 font-bold truncate">Logo Carregado</span>
+                                            <div className="flex flex-col items-center gap-1.5 w-full max-w-xs py-1">
+                                              <div className="flex items-center gap-1.5">
+                                                <Loader2 className="w-3.5 h-3.5 text-purple-400 animate-spin" />
+                                                <span className="text-[9px] uppercase font-black tracking-widest text-slate-400">
+                                                  Enviando imagem... {uploadProgress[`label_${idx}`] !== undefined ? `${uploadProgress[`label_${idx}`]}%` : '0%'}
+                                                </span>
                                               </div>
-                                              <div className="flex items-center gap-1.5 item-center">
-                                                <Label htmlFor={`label-file-${idx}`} className="text-[8px] uppercase font-black tracking-widest px-2 h-7 bg-purple-500/10 border border-purple-500/20 rounded flex items-center justify-center cursor-pointer text-purple-400 hover:bg-purple-500/20 transition-all">
-                                                  Alterar
-                                                </Label>
-                                                <input
-                                                  id={`label-file-${idx}`}
-                                                  type="file"
-                                                  accept="image/*"
-                                                  onChange={(e) => handleFileUpload(e, `label_${idx}`, ['.png', '.jpg', '.jpeg', 'image/'])}
-                                                  className="hidden"
+                                              <div className="w-full bg-white/5 rounded-full h-1 overflow-hidden border border-white/5">
+                                                <div 
+                                                  className="bg-gradient-to-r from-purple-500 to-pink-500 h-full rounded-full transition-all duration-300" 
+                                                  style={{ width: `${uploadProgress[`label_${idx}`] || 0}%` }}
                                                 />
+                                              </div>
+                                            </div>
+                                          ) : label.link && (label.link.includes('firebasestorage') || label.link.includes('/uploads/')) ? (
+                                            <div className="flex flex-col sm:flex-row items-center justify-between w-full bg-purple-950/20 border border-purple-500/20 p-2.5 rounded-xl gap-3">
+                                              <div className="flex items-center gap-2.5 w-full sm:w-auto min-w-0">
+                                                <img 
+                                                  src={label.link} 
+                                                  alt="Logo da Gravadora" 
+                                                  className="w-8 h-8 object-cover rounded bg-white/5 border border-white/10 shrink-0"
+                                                  referrerPolicy="no-referrer"
+                                                />
+                                                <div className="min-w-0 flex-1">
+                                                  <p className="text-[8px] font-black uppercase tracking-wider text-purple-400 mb-0.5">Logo Carregado</p>
+                                                  <p className="text-xs text-slate-200 font-bold truncate" title={getFriendlyFileName(label.link)}>
+                                                    {getFriendlyFileName(label.link)}
+                                                  </p>
+                                                </div>
+                                              </div>
+                                              <div className="flex items-center gap-1.5 shrink-0">
+                                                <Button
+                                                  type="button"
+                                                  variant="destructive"
+                                                  size="sm"
+                                                  onClick={() => {
+                                                    const updated = [...newAsset.labels!];
+                                                    updated[idx] = { ...updated[idx], link: '' };
+                                                    setNewAsset({ ...newAsset, labels: updated });
+                                                    toast.success("Logo removido!");
+                                                  }}
+                                                  className="h-7 px-2.5 rounded-lg text-[8px] font-black uppercase tracking-widest flex items-center gap-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 shadow-none"
+                                                >
+                                                  <Trash2 className="w-3 h-3" />
+                                                  Apagar
+                                                </Button>
                                               </div>
                                             </div>
                                           ) : (
@@ -1217,27 +1395,50 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                             ) : (
                               <div className="relative border border-dashed border-white/10 bg-white/[0.01] hover:bg-white/[0.03] transition-all rounded-2xl p-4 flex flex-col items-center justify-center min-h-[5rem]">
                                 {uploadingState['flyerPhoto'] ? (
-                                  <div className="flex flex-col items-center gap-2">
-                                    <Loader2 className="w-6 h-6 text-purple-400 animate-spin" />
-                                    <span className="text-[10px] uppercase font-black tracking-widest text-slate-400">Enviando foto...</span>
-                                  </div>
-                                ) : newAsset.flyerPhoto && newAsset.flyerPhoto.includes('firebasestorage') ? (
-                                  <div className="flex items-center justify-between w-full bg-emerald-500/10 border border-emerald-500/20 p-2.5 rounded-xl">
-                                    <div className="flex items-center space-x-2 truncate">
-                                      <Paperclip className="w-4 h-4 text-emerald-400 shrink-0" />
-                                      <span className="text-xs text-emerald-400 font-bold truncate">Foto de Flyer Pronta</span>
-                                    </div>
+                                  <div className="flex flex-col items-center gap-2 w-full max-w-xs py-2">
                                     <div className="flex items-center gap-2">
-                                      <Label htmlFor="flyer-file-ref" className="text-[9px] uppercase font-black tracking-widest px-2.5 h-8 bg-purple-500/10 border border-purple-500/20 rounded-lg flex items-center justify-center cursor-pointer text-purple-400 hover:bg-purple-500/20 transition-all">
-                                        Alterar
-                                      </Label>
-                                      <input
-                                        id="flyer-file-ref"
-                                        type="file"
-                                        accept="image/*"
-                                        onChange={(e) => handleFileUpload(e, 'flyerPhoto', ['.png', '.jpg', '.jpeg', 'image/'])}
-                                        className="hidden"
+                                      <Loader2 className="w-4 h-4 text-purple-400 animate-spin" />
+                                      <span className="text-[10px] uppercase font-black tracking-widest text-slate-400">
+                                        Enviando foto... {uploadProgress['flyerPhoto'] !== undefined ? `${uploadProgress['flyerPhoto']}%` : '0%'}
+                                      </span>
+                                    </div>
+                                    <div className="w-full bg-white/5 rounded-full h-1.5 overflow-hidden border border-white/5 mt-1">
+                                      <div 
+                                        className="bg-gradient-to-r from-purple-500 to-pink-500 h-full rounded-full transition-all duration-300" 
+                                        style={{ width: `${uploadProgress['flyerPhoto'] || 0}%` }}
                                       />
+                                    </div>
+                                  </div>
+                                ) : newAsset.flyerPhoto && (newAsset.flyerPhoto.includes('firebasestorage') || newAsset.flyerPhoto.includes('/uploads/')) ? (
+                                  <div className="flex flex-col sm:flex-row items-center justify-between w-full bg-purple-950/20 border border-purple-500/20 p-4 rounded-2xl gap-4">
+                                    <div className="flex items-center gap-3 w-full sm:w-auto min-w-0">
+                                      <img 
+                                        src={newAsset.flyerPhoto} 
+                                        alt="Foto de Flyer oficial" 
+                                        className="w-12 h-12 object-cover rounded-xl bg-white/5 border border-white/10 shrink-0 shadow-md"
+                                        referrerPolicy="no-referrer"
+                                      />
+                                      <div className="min-w-0 flex-1">
+                                        <p className="text-[10px] font-black uppercase tracking-wider text-purple-400 mb-0.5">Foto do Flyer Carregada</p>
+                                        <p className="text-sm text-slate-200 font-bold truncate" title={getFriendlyFileName(newAsset.flyerPhoto)}>
+                                          {getFriendlyFileName(newAsset.flyerPhoto)}
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end">
+                                      <Button
+                                        type="button"
+                                        variant="destructive"
+                                        size="sm"
+                                        onClick={() => {
+                                          setNewAsset(prev => ({ ...prev, flyerPhoto: '' }));
+                                          toast.success("Foto do flyer removida!");
+                                        }}
+                                        className="h-9 px-3.5 rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5 transition-all bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 shadow-none"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                        Apagar Foto
+                                      </Button>
                                     </div>
                                   </div>
                                 ) : (
@@ -1306,27 +1507,47 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                             ) : (
                               <div className="relative border border-dashed border-white/10 bg-white/[0.01] hover:bg-white/[0.03] transition-all rounded-2xl p-4 flex flex-col items-center justify-center min-h-[5rem]">
                                 {uploadingState['animationVideo'] ? (
-                                  <div className="flex flex-col items-center gap-2">
-                                    <Loader2 className="w-6 h-6 text-purple-400 animate-spin" />
-                                    <span className="text-[10px] uppercase font-black tracking-widest text-slate-400">Enviando vídeo (.mp4)...</span>
-                                  </div>
-                                ) : newAsset.animationVideo && newAsset.animationVideo.includes('firebasestorage') ? (
-                                  <div className="flex items-center justify-between w-full bg-emerald-500/10 border border-emerald-500/20 p-2.5 rounded-xl">
-                                    <div className="flex items-center space-x-2 truncate">
-                                      <Paperclip className="w-4 h-4 text-emerald-400 shrink-0" />
-                                      <span className="text-xs text-emerald-400 font-bold truncate">Vídeo para Motion Pronto</span>
-                                    </div>
+                                  <div className="flex flex-col items-center gap-2 w-full max-w-xs py-2">
                                     <div className="flex items-center gap-2">
-                                      <Label htmlFor="video-file-ref" className="text-[9px] uppercase font-black tracking-widest px-2.5 h-8 bg-purple-500/10 border border-purple-500/20 rounded-lg flex items-center justify-center cursor-pointer text-purple-400 hover:bg-purple-500/20 transition-all">
-                                        Alterar
-                                      </Label>
-                                      <input
-                                        id="video-file-ref"
-                                        type="file"
-                                        accept="video/*"
-                                        onChange={(e) => handleFileUpload(e, 'animationVideo', ['.mp4', '.mov', '.avi', 'video/'])}
-                                        className="hidden"
+                                      <Loader2 className="w-4 h-4 text-purple-400 animate-spin" />
+                                      <span className="text-[10px] uppercase font-black tracking-widest text-slate-400">
+                                        Enviando vídeo (.mp4)... {uploadProgress['animationVideo'] !== undefined ? `${uploadProgress['animationVideo']}%` : '0%'}
+                                      </span>
+                                    </div>
+                                    <div className="w-full bg-white/5 rounded-full h-1.5 overflow-hidden border border-white/5 mt-1">
+                                      <div 
+                                        className="bg-gradient-to-r from-purple-500 to-pink-500 h-full rounded-full transition-all duration-300" 
+                                        style={{ width: `${uploadProgress['animationVideo'] || 0}%` }}
                                       />
+                                    </div>
+                                  </div>
+                                ) : newAsset.animationVideo && (newAsset.animationVideo.includes('firebasestorage') || newAsset.animationVideo.includes('/uploads/')) ? (
+                                  <div className="flex flex-col sm:flex-row items-center justify-between w-full bg-purple-950/20 border border-purple-500/20 p-4 rounded-2xl gap-4">
+                                    <div className="flex items-center gap-3 w-full sm:w-auto min-w-0">
+                                      <div className="w-12 h-12 rounded-xl bg-purple-500/10 flex items-center justify-center border border-purple-500/20 text-purple-400 shrink-0">
+                                        <Film className="w-6 h-6" />
+                                      </div>
+                                      <div className="min-w-0 flex-1">
+                                        <p className="text-[10px] font-black uppercase tracking-wider text-purple-400 mb-0.5">Vídeo / Motion Loop Carregado</p>
+                                        <p className="text-sm text-slate-200 font-bold truncate" title={getFriendlyFileName(newAsset.animationVideo)}>
+                                          {getFriendlyFileName(newAsset.animationVideo)}
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end">
+                                      <Button
+                                        type="button"
+                                        variant="destructive"
+                                        size="sm"
+                                        onClick={() => {
+                                          setNewAsset(prev => ({ ...prev, animationVideo: '' }));
+                                          toast.success("Vídeo do motion loop removido!");
+                                        }}
+                                        className="h-9 px-3.5 rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5 transition-all bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 shadow-none"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                        Apagar Vídeo
+                                      </Button>
                                     </div>
                                   </div>
                                 ) : (
@@ -1396,7 +1617,10 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                           <div className="flex bg-white/5 p-0.5 rounded-xl border border-white/10 w-fit">
                             <button
                               type="button"
-                              onClick={() => setNewAsset({...newAsset, musicUrlType: 'link'})}
+                              onClick={() => {
+                                setNewAsset({...newAsset, musicUrlType: 'link'});
+                                setDurationMode('time');
+                              }}
                               className={cn(
                                 "rounded-lg text-[8px] font-black uppercase tracking-widest h-7 px-2.5 transition-all cursor-pointer",
                                 (newAsset.musicUrlType || 'link') === 'link'
@@ -1408,7 +1632,10 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                             </button>
                             <button
                               type="button"
-                              onClick={() => setNewAsset({...newAsset, musicUrlType: 'file'})}
+                              onClick={() => {
+                                setNewAsset({...newAsset, musicUrlType: 'file'});
+                                setDurationMode('visual');
+                              }}
                               className={cn(
                                 "rounded-lg text-[8px] font-black uppercase tracking-widest h-7 px-2.5 transition-all cursor-pointer",
                                 newAsset.musicUrlType === 'file'
@@ -1452,27 +1679,47 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                           <div className="space-y-4">
                             <div className="relative border border-dashed border-white/10 bg-white/[0.01] hover:bg-white/[0.03] transition-all rounded-2xl p-4 flex flex-col items-center justify-center min-h-[5rem]">
                               {uploadingState['musicUrl'] ? (
-                                <div className="flex flex-col items-center gap-2">
-                                  <Loader2 className="w-6 h-6 text-purple-400 animate-spin" />
-                                  <span className="text-[10px] uppercase font-black tracking-widest text-slate-400">Enviando música...</span>
-                                </div>
-                              ) : newAsset.musicUrl && newAsset.musicUrl.includes('firebasestorage') ? (
-                                <div className="flex items-center justify-between w-full bg-emerald-500/10 border border-emerald-500/20 p-2.5 rounded-xl">
-                                  <div className="flex items-center space-x-2 truncate">
-                                    <Paperclip className="w-4 h-4 text-emerald-400 shrink-0" />
-                                    <span className="text-xs text-emerald-400 font-bold truncate">Música Pronta</span>
-                                  </div>
+                                <div className="flex flex-col items-center gap-2 w-full max-w-xs py-2">
                                   <div className="flex items-center gap-2">
-                                    <Label htmlFor="music-file-ref" className="text-[9px] uppercase font-black tracking-widest px-2.5 h-8 bg-purple-500/10 border border-purple-500/20 rounded-lg flex items-center justify-center cursor-pointer text-purple-400 hover:bg-purple-500/20 transition-all">
-                                      Alterar
-                                    </Label>
-                                    <input
-                                      id="music-file-ref"
-                                      type="file"
-                                      accept="audio/*"
-                                      onChange={(e) => handleFileUpload(e, 'musicUrl', ['.mp3', '.wav', '.flac', '.m4a', 'audio/'])}
-                                      className="hidden"
+                                    <Loader2 className="w-4 h-4 text-purple-400 animate-spin" />
+                                    <span className="text-[10px] uppercase font-black tracking-widest text-slate-400">
+                                      Enviando música... {uploadProgress['musicUrl'] !== undefined ? `${uploadProgress['musicUrl']}%` : '0%'}
+                                    </span>
+                                  </div>
+                                  <div className="w-full bg-white/5 rounded-full h-1.5 overflow-hidden border border-white/5 mt-1">
+                                    <div 
+                                      className="bg-gradient-to-r from-purple-500 to-pink-500 h-full rounded-full transition-all duration-300" 
+                                      style={{ width: `${uploadProgress['musicUrl'] || 0}%` }}
                                     />
+                                  </div>
+                                </div>
+                              ) : newAsset.musicUrl && (newAsset.musicUrl.includes('firebasestorage') || newAsset.musicUrl.includes('/uploads/')) ? (
+                                <div className="flex flex-col sm:flex-row items-center justify-between w-full bg-purple-950/20 border border-purple-500/20 p-4 rounded-2xl gap-4">
+                                  <div className="flex items-center gap-3 w-full sm:w-auto min-w-0">
+                                    <div className="w-12 h-12 rounded-xl bg-purple-500/10 flex items-center justify-center border border-purple-500/20 text-purple-400 shrink-0">
+                                      <Music className="w-6 h-6 animate-pulse" />
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                      <p className="text-[10px] font-black uppercase tracking-wider text-purple-400 mb-0.5">Áudio da Música Carregado</p>
+                                      <p className="text-sm text-slate-200 font-bold truncate" title={getFriendlyFileName(newAsset.musicUrl)}>
+                                        {getFriendlyFileName(newAsset.musicUrl)}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end">
+                                    <Button
+                                      type="button"
+                                      variant="destructive"
+                                      size="sm"
+                                      onClick={() => {
+                                        setNewAsset(prev => ({ ...prev, musicUrl: '', musicDuration: '' }));
+                                        toast.success("Música removida!");
+                                      }}
+                                      className="h-9 px-3.5 rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5 transition-all bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 shadow-none"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                      Apagar Música
+                                    </Button>
                                   </div>
                                 </div>
                               ) : (
@@ -1502,7 +1749,7 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                                   <button
                                     type="button"
                                     onClick={() => {
-                                      if (newAsset.musicUrl && newAsset.musicUrl.includes('firebasestorage')) {
+                                      if (newAsset.musicUrl && (newAsset.musicUrl.includes('firebasestorage') || newAsset.musicUrl.includes('/uploads/'))) {
                                         setDurationMode('visual');
                                       } else {
                                         toast.warning("Envie o arquivo de áudio (.mp3/wav) primeiro para habilitar a escolha visual!");
@@ -1532,7 +1779,7 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                                 </div>
                               </div>
 
-                              {durationMode === 'visual' && newAsset.musicUrl && newAsset.musicUrl.includes('firebasestorage') ? (
+                              {durationMode === 'visual' && newAsset.musicUrl && (newAsset.musicUrl.includes('firebasestorage') || newAsset.musicUrl.includes('/uploads/')) ? (
                                 <div className="space-y-2">
                                   <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400">
                                     Corte / Drop Escolhido
@@ -1545,11 +1792,11 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                                     />
                                     <Button
                                       type="button"
-                                      onClick={() => setIsWaveformOpen(true)}
-                                      className="flex-1 bg-pink-500 hover:bg-pink-600 text-white rounded-2xl h-12 font-extrabold uppercase tracking-wider text-[9px] flex items-center justify-center gap-1.5 shadow-[0_0_15px_rgba(236,72,153,0.15)] animate-pulse"
+                                      onClick={() => setIsWaveformOpen(!isWaveformOpen)}
+                                      className="flex-1 bg-pink-500 hover:bg-pink-600 text-white rounded-2xl h-12 font-extrabold uppercase tracking-wider text-[9px] flex items-center justify-center gap-1.5 shadow-[0_0_15px_rgba(236,72,153,0.15)] transition-all"
                                     >
                                       <Music className="w-3.5 h-3.5" />
-                                      {newAsset.musicDuration ? "Ajustar Drop" : "Marcar Drop Visualmente"}
+                                      {isWaveformOpen ? "Fechar Ajuste" : newAsset.musicDuration ? "Ajustar Drop" : "Marcar Drop Visualmente"}
                                     </Button>
                                   </div>
                                 </div>
@@ -1567,6 +1814,22 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                                 </div>
                               )}
                             </div>
+
+                            {isWaveformOpen && durationMode === 'visual' && newAsset.musicUrl && (newAsset.musicUrl.includes('firebasestorage') || newAsset.musicUrl.includes('/uploads/')) && (
+                              <div className="mt-4 text-left w-full">
+                                <WaveformSelector
+                                  audioUrl={newAsset.musicUrl}
+                                  musicName={newAsset.musicName || 'Sem nome'}
+                                  initialDuration={newAsset.musicDuration}
+                                  onConfirm={(timeStr) => {
+                                    setNewAsset({ ...newAsset, musicDuration: timeStr });
+                                    setIsWaveformOpen(false);
+                                  }}
+                                  onClose={() => setIsWaveformOpen(false)}
+                                  isInline={true}
+                                />
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -1597,16 +1860,6 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-
-        {isWaveformOpen && newAsset.musicUrl && (
-          <WaveformSelector
-            audioUrl={newAsset.musicUrl}
-            musicName={newAsset.musicName || 'Sem nome'}
-            initialDuration={newAsset.musicDuration}
-            onConfirm={(timeStr) => setNewAsset({ ...newAsset, musicDuration: timeStr })}
-            onClose={() => setIsWaveformOpen(false)}
-          />
-        )}
 
         <Dialog open={viewOpen} onOpenChange={setViewOpen}>
           <DialogContent className="rounded-[2rem] sm:max-w-[700px] w-[95vw] glass border-white/10 text-slate-100 p-4 sm:p-8 max-h-[92vh] overflow-hidden flex flex-col">
