@@ -29,6 +29,14 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'completed'>('all');
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
+  const [viewOpen, setViewOpen] = useState(false);
+  const [selectedViewAsset, setSelectedViewAsset] = useState<DjAsset | null>(null);
+
+  const handleOpenView = (asset: DjAsset) => {
+    setSelectedViewAsset(asset);
+    setViewOpen(true);
+  };
+
   // Form
   const [newAsset, setNewAsset] = useState<Partial<DjAsset>>({
     name: '',
@@ -814,6 +822,278 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        <Dialog open={viewOpen} onOpenChange={setViewOpen}>
+          <DialogContent className="rounded-[2rem] sm:max-w-[700px] w-[95vw] glass border-white/10 text-slate-100 p-4 sm:p-8 max-h-[92vh] overflow-hidden flex flex-col">
+            <DialogHeader className="shrink-0 pb-4 border-b border-white/5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 bg-gradient-to-tr from-purple-600 to-indigo-600 rounded-full flex items-center justify-center shadow-lg">
+                    <Disc className="w-5 h-5 text-white animate-spin" style={{ animationDuration: '6s' }} />
+                  </div>
+                  <div>
+                    <DialogTitle className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                      {selectedViewAsset?.name}
+                    </DialogTitle>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                      Ficha de Informações do DJ / Atração
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={cn(
+                    "text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full",
+                    selectedViewAsset?.presskitStatus === 'completed' ? "bg-emerald-500/20 text-emerald-400" : "bg-white/10 text-slate-400"
+                  )}>
+                    {selectedViewAsset?.presskitStatus === 'completed' ? 'Preenchido' : 'Pendente'}
+                  </span>
+                </div>
+              </div>
+            </DialogHeader>
+
+            <div className="flex-1 overflow-y-auto py-6 space-y-6 pr-1 custom-scrollbar">
+              {/* Row 1: Status Details */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="bg-white/[0.02] border border-white/5 p-4 rounded-2xl space-y-1">
+                  <p className="text-[9px] uppercase font-black tracking-widest text-slate-500">Prioridade da Arte</p>
+                  <p className={cn(
+                    "text-xs font-black uppercase tracking-wider",
+                    selectedViewAsset?.priority === 'urgent' ? "text-rose-400" :
+                    selectedViewAsset?.priority === 'medium' ? "text-amber-400" :
+                    "text-emerald-400"
+                  )}>
+                    {selectedViewAsset?.priority === 'low' ? 'Baixa' : selectedViewAsset?.priority === 'medium' ? 'Média' : 'Urgente'}
+                  </p>
+                </div>
+
+                <div className="bg-white/[0.02] border border-white/5 p-4 rounded-2xl space-y-1">
+                  <p className="text-[9px] uppercase font-black tracking-widest text-slate-500">Data de Entrega da Arte</p>
+                  <p className="text-xs font-black text-white tracking-wider flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-pink-400" />
+                    {selectedViewAsset?.artDeadline || 'Não definida'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Presskit Link */}
+              <div className="bg-white/[0.02] border border-white/5 p-5 rounded-2xl space-y-3">
+                <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                  Link do Presskit & Fotos
+                </p>
+                {selectedViewAsset?.presskitUrl ? (
+                  <div className="flex items-center justify-between p-3.5 bg-white/5 rounded-2xl border border-white/10">
+                    <span className="text-xs font-bold text-slate-200 truncate pr-4">{selectedViewAsset.presskitUrl}</span>
+                    <div className="flex gap-2 shrink-0">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => {
+                          navigator.clipboard.writeText(selectedViewAsset.presskitUrl || '');
+                          toast.success("Link copiado!");
+                        }}
+                        className="h-8 rounded-xl text-[10px] uppercase font-black tracking-widest"
+                      >
+                        Copiar
+                      </Button>
+                      <a
+                        href={selectedViewAsset.presskitUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center justify-center h-8 rounded-xl text-[10px] uppercase font-black tracking-widest bg-pink-500 text-white hover:bg-pink-600 px-3 transition-colors"
+                      >
+                        Acessar
+                      </a>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-xs text-rose-400/80 font-bold italic bg-rose-500/5 p-4 rounded-2xl border border-rose-500/10">
+                    Nenhum link fornecido até o momento.
+                  </p>
+                )}
+              </div>
+
+              {/* Logos Mandatórios */}
+              {selectedViewAsset?.hasMandatoryLogo ? (
+                <div className="bg-white/[0.02] border border-white/5 p-5 rounded-2xl space-y-4">
+                  <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest flex items-center gap-1.5">
+                    <ShieldAlert className="w-3.5 h-3.5 text-amber-500" />
+                    Logos Obrigatórios para Materiais de Divulgação
+                  </p>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Agencies */}
+                    <div className="space-y-2">
+                      <p className="text-[9px] uppercase font-black tracking-widest text-amber-400/80">Agência(s)</p>
+                      {selectedViewAsset.agencies && selectedViewAsset.agencies.length > 0 ? (
+                        <div className="space-y-1.5">
+                          {selectedViewAsset.agencies.map((agency, i) => (
+                            <div key={i} className="text-xs flex items-center justify-between font-bold text-slate-200 bg-white/5 border border-white/5 rounded-xl px-3 py-2">
+                              <span className="truncate">{agency.name || '-'}</span>
+                              {agency.link && (
+                                <a
+                                  href={agency.link}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-[10px] text-pink-400 hover:text-pink-300 transition-colors"
+                                >
+                                  Logo
+                                </a>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-slate-500 italic">Nenhuma agência adicionada.</p>
+                      )}
+                    </div>
+
+                    {/* Labels */}
+                    <div className="space-y-2">
+                      <p className="text-[9px] uppercase font-black tracking-widest text-amber-400/80">Gravadora(s)</p>
+                      {selectedViewAsset.labels && selectedViewAsset.labels.length > 0 && selectedViewAsset.labels.some(l => l.name?.trim()) ? (
+                        <div className="space-y-1.5">
+                          {selectedViewAsset.labels.map((label, i) => label.name && (
+                            <div key={i} className="text-xs flex items-center justify-between font-bold text-slate-200 bg-white/5 border border-white/5 rounded-xl px-3 py-2">
+                              <span className="truncate">{label.name}</span>
+                              {label.link && (
+                                <a
+                                  href={label.link}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-[10px] text-pink-400 hover:text-pink-300 transition-colors"
+                                >
+                                  Logo
+                                </a>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-slate-500 italic">Nenhuma gravadora cadastrada.</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-white/[0.02] border border-white/5 p-4 rounded-2xl">
+                  <p className="text-xs text-slate-500 font-bold italic">Nenhum logo obrigatório exigido.</p>
+                </div>
+              )}
+
+              {/* Material Visual */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="bg-white/[0.02] border border-white/5 p-5 rounded-2xl space-y-3">
+                  <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest flex items-center gap-1.5">
+                    <Image className="w-3.5 h-3.5 text-blue-400" />
+                    Foto p/ Flyer
+                  </p>
+                  {selectedViewAsset?.flyerPhoto ? (
+                    <div className="bg-white/5 border border-white/10 p-3 rounded-xl flex flex-col justify-between h-[84px]">
+                      <p className="text-xs font-bold text-slate-200 line-clamp-2 leading-relaxed">{selectedViewAsset.flyerPhoto}</p>
+                      {selectedViewAsset.flyerPhoto.startsWith('http') && (
+                        <a
+                          href={selectedViewAsset.flyerPhoto}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[10px] text-blue-400 hover:text-blue-300 flex items-center gap-0.5 font-bold mt-1"
+                        >
+                          Acessar link <ExternalLink className="w-2.5 h-2.5" />
+                        </a>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-600 font-bold italic text-center py-4 bg-white/[0.01] rounded-xl border border-dashed border-white/5">
+                      Pendente/Não enviada
+                    </p>
+                  )}
+                </div>
+
+                <div className="bg-white/[0.02] border border-white/5 p-5 rounded-2xl space-y-3">
+                  <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest flex items-center gap-1.5">
+                    <Film className="w-3.5 h-3.5 text-teal-400" />
+                    Vídeo p/ Motion
+                  </p>
+                  {selectedViewAsset?.animationVideo ? (
+                    <div className="bg-white/5 border border-white/10 p-3 rounded-xl flex flex-col justify-between h-[84px]">
+                      <p className="text-xs font-bold text-slate-200 line-clamp-2 leading-relaxed">{selectedViewAsset.animationVideo}</p>
+                      {selectedViewAsset.animationVideo.startsWith('http') && (
+                        <a
+                          href={selectedViewAsset.animationVideo}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[10px] text-teal-400 hover:text-teal-300 flex items-center gap-0.5 font-bold mt-1"
+                        >
+                          Acessar link <ExternalLink className="w-2.5 h-2.5" />
+                        </a>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-600 font-bold italic text-center py-4 bg-white/[0.01] rounded-xl border border-dashed border-white/5">
+                      Pendente/Não enviado
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Trilha de Entrada */}
+              <div className="bg-white/[0.02] border border-white/5 p-5 rounded-2xl space-y-3">
+                <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest flex items-center gap-1.5">
+                  <Music className="w-3.5 h-3.5 text-pink-400" />
+                  Música de Entrada (Track)
+                </p>
+                {selectedViewAsset?.musicName ? (
+                  <div className="p-4 bg-gradient-to-br from-indigo-500/10 to-purple-500/10 rounded-[1.5rem] border border-white/5 flex items-center justify-between">
+                    <div className="space-y-1">
+                      <p className="text-sm font-black text-white">{selectedViewAsset.musicName}</p>
+                      <div className="flex items-center space-x-2 text-slate-500">
+                        <Clock className="w-3 h-3 text-purple-400 animate-pulse" />
+                        <span className="text-[10px] font-black uppercase">{selectedViewAsset.musicDuration || "Duração não definida"}</span>
+                      </div>
+                    </div>
+                    {selectedViewAsset.musicUrl && (
+                      <a
+                        href={selectedViewAsset.musicUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="rounded-full bg-white/10 p-2.5 hover:bg-pink-500 hover:text-white transition-all shadow-lg text-slate-300"
+                      >
+                        <Music className="w-4 h-4" />
+                      </a>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-500 font-bold italic text-center py-4 bg-white/[0.01] rounded-xl border border-dashed border-white/5">
+                    Nenhuma trilha fornecida.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <DialogFooter className="pt-4 border-t border-white/5 flex flex-col sm:flex-row gap-2 sm:gap-3 shrink-0">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setViewOpen(false)}
+                className="w-full sm:w-1/3 rounded-2xl h-12 border-white/10 hover:bg-white/5 font-black text-slate-300 uppercase tracking-widest text-xs"
+              >
+                Fechar
+              </Button>
+              <Button
+                onClick={() => {
+                  setViewOpen(false);
+                  if (selectedViewAsset) {
+                    handleOpenEdit(selectedViewAsset);
+                  }
+                }}
+                className="w-full sm:w-2/3 bg-pink-500 hover:bg-pink-600 text-white rounded-2xl h-12 font-black shadow-[0_0_20px_rgba(236,72,153,0.3)] uppercase tracking-widest text-xs flex items-center justify-center gap-2"
+              >
+                <Pencil className="w-4 h-4" />
+                Editar Informações
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
 
       <div className="bg-white/[0.02] border border-white/5 rounded-3xl p-4 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4 backdrop-blur-md">
@@ -904,7 +1184,7 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
           {filteredAssets.map(asset => (
             <Card 
               key={asset.id} 
-              onClick={() => handleOpenEdit(asset)}
+              onClick={() => handleOpenView(asset)}
               className="rounded-[2rem] border-white/5 bg-white/5 backdrop-blur-md shadow-2xl hover:shadow-purple-500/15 hover:bg-white/[0.07] transition-all duration-300 overflow-hidden group border cursor-pointer select-none"
             >
               <div className="bg-white/5 p-6 flex items-center justify-between border-b border-white/5">
@@ -1254,7 +1534,7 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                           key={asset.id} 
                           draggable
                           onDragStart={(e) => handleDragStart(e, asset.id)}
-                          onClick={() => handleOpenEdit(asset)}
+                          onClick={() => handleOpenView(asset)}
                           className="bg-purple-500/10 border border-purple-500/20 p-2 rounded-xl cursor-grab active:cursor-grabbing hover:bg-purple-500/20 transition-colors group/item text-left"
                         >
                           <p className="text-[9px] font-black text-white uppercase tracking-tight leading-tight group-hover/item:text-purple-400 truncate">
