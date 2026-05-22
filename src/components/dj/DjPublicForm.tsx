@@ -90,6 +90,7 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
   const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
   const [durationMode, setDurationMode] = useState<'time' | 'visual'>('time');
   const [isWaveformOpen, setIsWaveformOpen] = useState(false);
+  const [localMusicBlobUrl, setLocalMusicBlobUrl] = useState<string | null>(null);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, fieldKey: string, allowedTypes: string[], maxSizeMB = 50) => {
     const file = e.target.files?.[0];
@@ -119,6 +120,15 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
     if (!matchType) {
       toast.error(`Tipo de arquivo não permitido. Por favor envie um arquivo do tipo: ${allowedTypes.join(', ')}`);
       return;
+    }
+
+    if (fieldKey === 'musicUrl') {
+      try {
+        const localUrl = URL.createObjectURL(file);
+        setLocalMusicBlobUrl(localUrl);
+      } catch (err) {
+        console.error("Erro ao criar URL do blob local:", err);
+      }
     }
 
     setUploadingState(prev => ({ ...prev, [fieldKey]: true }));
@@ -885,7 +895,7 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
                                     />
                                   </div>
                                 </div>
-                              ) : isUploadedFile(musicUrl) ? (
+                              ) : (isUploadedFile(musicUrl) || !!localMusicBlobUrl) ? (
                                 <div className="flex flex-col sm:flex-row items-center justify-between w-full bg-purple-950/20 border border-purple-500/20 p-4 rounded-2xl gap-4">
                                   <div className="flex items-center gap-3 w-full sm:w-auto min-w-0">
                                     <div className="w-12 h-12 rounded-xl bg-purple-500/10 flex items-center justify-center border border-purple-500/20 text-purple-400 shrink-0">
@@ -893,8 +903,8 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
                                     </div>
                                     <div className="min-w-0 flex-1">
                                       <p className="text-[10px] font-black uppercase tracking-wider text-purple-400 mb-0.5">Áudio Carregado</p>
-                                      <p className="text-sm text-slate-200 font-bold truncate" title={getFriendlyFileName(musicUrl)}>
-                                        {getFriendlyFileName(musicUrl)}
+                                      <p className="text-sm text-slate-200 font-bold truncate" title={getFriendlyFileName(musicUrl || localMusicBlobUrl || undefined)}>
+                                        {getFriendlyFileName(musicUrl || localMusicBlobUrl || undefined)}
                                       </p>
                                     </div>
                                   </div>
@@ -905,6 +915,7 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
                                       size="sm"
                                       onClick={() => {
                                         setMusicUrl('');
+                                        setLocalMusicBlobUrl(null);
                                         setDurationMode('time');
                                         toast.success("Música removida! Você pode escolher outro arquivo.");
                                       }}
@@ -942,7 +953,7 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
                                   <button
                                     type="button"
                                     onClick={() => {
-                                      if (isUploadedFile(musicUrl)) {
+                                      if (isUploadedFile(musicUrl) || !!localMusicBlobUrl) {
                                         setDurationMode('visual');
                                       } else {
                                         toast.warning("Envie o arquivo de áudio (.mp3/wav) primeiro para habilitar a escolha visual!");
@@ -972,7 +983,7 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
                                 </div>
                               </div>
 
-                              {durationMode === 'visual' && isUploadedFile(musicUrl) ? (
+                              {(durationMode === 'visual' && (isUploadedFile(musicUrl) || !!localMusicBlobUrl)) ? (
                                 <div className="space-y-2">
                                   <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400">
                                     Corte / Drop Escolhido
@@ -982,8 +993,10 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
                                       readOnly 
                                       value={musicDuration || 'Não marcado'} 
                                       className="rounded-2xl bg-white/5 border-white/10 text-white h-12 font-mono font-bold w-[120px] text-center" 
+                                      id="public-music-duration"
                                     />
                                     <Button
+                                      id="public-btn-waveform-toggle"
                                       type="button"
                                       onClick={() => setIsWaveformOpen(!isWaveformOpen)}
                                       className="flex-1 bg-pink-500 hover:bg-pink-600 text-white rounded-2xl h-11 sm:h-12 font-extrabold uppercase tracking-wider text-[9px] flex items-center justify-center gap-1.5 shadow-[0_0_15px_rgba(236,72,153,0.15)] transition-all"
@@ -1003,15 +1016,16 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
                                     onChange={e => setMusicDuration(e.target.value)} 
                                     placeholder="Ex: De 01:20 a 01:45" 
                                     className="rounded-2xl bg-white/5 border-white/10 text-white h-11 sm:h-12 text-sm" 
+                                    id="public-manual-music-duration"
                                   />
                                 </div>
                               )}
                             </div>
 
-                            {isWaveformOpen && durationMode === 'visual' && isUploadedFile(musicUrl) && (
-                              <div className="mt-4 text-left w-full">
+                            {isWaveformOpen && durationMode === 'visual' && (isUploadedFile(musicUrl) || !!localMusicBlobUrl) && (
+                              <div className="mt-4 text-left w-full" id="public-waveform-selector-container">
                                 <WaveformSelector
-                                  audioUrl={musicUrl}
+                                  audioUrl={localMusicBlobUrl || musicUrl || ''}
                                   musicName={musicName || 'Sem nome'}
                                   initialDuration={musicDuration}
                                   onConfirm={(timeStr) => {

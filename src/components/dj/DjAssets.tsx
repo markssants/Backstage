@@ -102,6 +102,7 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
   const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
   const [durationMode, setDurationMode] = useState<'time' | 'visual'>('time');
   const [isWaveformOpen, setIsWaveformOpen] = useState(false);
+  const [localMusicBlobUrl, setLocalMusicBlobUrl] = useState<string | null>(null);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, fieldKey: string, allowedTypes: string[], maxSizeMB = 50) => {
     const file = e.target.files?.[0];
@@ -126,6 +127,15 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
     if (!matchType) {
       toast.error(`Tipo de arquivo não permitido. Por favor envie um arquivo do tipo: ${allowedTypes.join(', ')}`);
       return;
+    }
+
+    if (fieldKey === 'musicUrl') {
+      try {
+        const localUrl = URL.createObjectURL(file);
+        setLocalMusicBlobUrl(localUrl);
+      } catch (err) {
+        console.error("Erro ao criar URL do blob local:", err);
+      }
     }
 
     setUploadingState(prev => ({ ...prev, [fieldKey]: true }));
@@ -578,6 +588,7 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
     setHasRecordLabel(false);
     setDurationMode('time');
     setIsWaveformOpen(false);
+    setLocalMusicBlobUrl(null);
   };
 
   const handleDelete = async (id: string) => {
@@ -1078,12 +1089,9 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                                     ) : isUploadedFile(agency.link) ? (
                                       <div className="flex flex-col sm:flex-row items-center justify-between w-full bg-purple-950/20 border border-purple-500/20 p-2.5 rounded-xl gap-3">
                                         <div className="flex items-center gap-2.5 w-full sm:w-auto min-w-0">
-                                          <img 
-                                            src={agency.link} 
-                                            alt="Logo da Assessoria" 
-                                            className="w-8 h-8 object-cover rounded bg-white/5 border border-white/10 shrink-0"
-                                            referrerPolicy="no-referrer"
-                                          />
+                                          <div className="w-8 h-8 rounded bg-purple-500/10 border border-purple-500/20 text-purple-400 flex items-center justify-center shrink-0">
+                                            <Disc className="w-4 h-4" />
+                                          </div>
                                           <div className="min-w-0 flex-1">
                                             <p className="text-[8px] font-black uppercase tracking-wider text-purple-400 mb-0.5">Logo Carregado</p>
                                             <p className="text-xs text-slate-200 font-bold truncate" title={getFriendlyFileName(agency.link)}>
@@ -1284,12 +1292,9 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                                           ) : isUploadedFile(label.link) ? (
                                             <div className="flex flex-col sm:flex-row items-center justify-between w-full bg-purple-950/20 border border-purple-500/20 p-2.5 rounded-xl gap-3">
                                               <div className="flex items-center gap-2.5 w-full sm:w-auto min-w-0">
-                                                <img 
-                                                  src={label.link} 
-                                                  alt="Logo da Gravadora" 
-                                                  className="w-8 h-8 object-cover rounded bg-white/5 border border-white/10 shrink-0"
-                                                  referrerPolicy="no-referrer"
-                                                />
+                                                <div className="w-8 h-8 rounded bg-purple-500/10 border border-purple-500/20 text-purple-400 flex items-center justify-center shrink-0">
+                                                  <Disc className="w-4 h-4" />
+                                                </div>
                                                 <div className="min-w-0 flex-1">
                                                   <p className="text-[8px] font-black uppercase tracking-wider text-purple-400 mb-0.5">Logo Carregado</p>
                                                   <p className="text-xs text-slate-200 font-bold truncate" title={getFriendlyFileName(label.link)}>
@@ -1495,12 +1500,9 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                                 ) : isUploadedFile(newAsset.flyerPhoto) ? (
                                   <div className="flex flex-col sm:flex-row items-center justify-between w-full bg-purple-950/20 border border-purple-500/20 p-4 rounded-2xl gap-4">
                                     <div className="flex items-center gap-3 w-full sm:w-auto min-w-0">
-                                      <img 
-                                        src={newAsset.flyerPhoto} 
-                                        alt="Foto de Flyer oficial" 
-                                        className="w-12 h-12 object-cover rounded-xl bg-white/5 border border-white/10 shrink-0 shadow-md"
-                                        referrerPolicy="no-referrer"
-                                      />
+                                      <div className="w-12 h-12 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 flex items-center justify-center shrink-0 shadow-md">
+                                        <Image className="w-6 h-6" />
+                                      </div>
                                       <div className="min-w-0 flex-1">
                                         <p className="text-[10px] font-black uppercase tracking-wider text-purple-400 mb-0.5">Foto do Flyer Carregada</p>
                                         <p className="text-sm text-slate-200 font-bold truncate" title={getFriendlyFileName(newAsset.flyerPhoto)}>
@@ -1776,7 +1778,7 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                                     />
                                   </div>
                                 </div>
-                              ) : isUploadedFile(newAsset.musicUrl) ? (
+                              ) : (isUploadedFile(newAsset.musicUrl) || !!localMusicBlobUrl) ? (
                                 <div className="flex flex-col sm:flex-row items-center justify-between w-full bg-purple-950/20 border border-purple-500/20 p-4 rounded-2xl gap-4">
                                   <div className="flex items-center gap-3 w-full sm:w-auto min-w-0">
                                     <div className="w-12 h-12 rounded-xl bg-purple-500/10 flex items-center justify-center border border-purple-500/20 text-purple-400 shrink-0">
@@ -1784,8 +1786,8 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                                     </div>
                                     <div className="min-w-0 flex-1">
                                       <p className="text-[10px] font-black uppercase tracking-wider text-purple-400 mb-0.5">Áudio da Música Carregado</p>
-                                      <p className="text-sm text-slate-200 font-bold truncate" title={getFriendlyFileName(newAsset.musicUrl)}>
-                                        {getFriendlyFileName(newAsset.musicUrl)}
+                                      <p className="text-sm text-slate-200 font-bold truncate" title={getFriendlyFileName(newAsset.musicUrl || localMusicBlobUrl || undefined)}>
+                                        {getFriendlyFileName(newAsset.musicUrl || localMusicBlobUrl || undefined)}
                                       </p>
                                     </div>
                                   </div>
@@ -1796,6 +1798,7 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                                       size="sm"
                                       onClick={() => {
                                         setNewAsset(prev => ({ ...prev, musicUrl: '', musicDuration: '' }));
+                                        setLocalMusicBlobUrl(null);
                                         toast.success("Música removida!");
                                       }}
                                       className="h-9 px-3.5 rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5 transition-all bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 shadow-none"
@@ -1832,7 +1835,7 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                                   <button
                                     type="button"
                                     onClick={() => {
-                                      if (isUploadedFile(newAsset.musicUrl)) {
+                                      if (isUploadedFile(newAsset.musicUrl) || !!localMusicBlobUrl) {
                                         setDurationMode('visual');
                                       } else {
                                         toast.warning("Envie o arquivo de áudio (.mp3/wav) primeiro para habilitar a escolha visual!");
@@ -1862,7 +1865,7 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                                 </div>
                               </div>
 
-                              {durationMode === 'visual' && isUploadedFile(newAsset.musicUrl) ? (
+                              {(durationMode === 'visual' && (isUploadedFile(newAsset.musicUrl) || !!localMusicBlobUrl)) ? (
                                 <div className="space-y-2">
                                   <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400">
                                     Corte / Drop Escolhido
@@ -1872,8 +1875,10 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                                       readOnly 
                                       value={newAsset.musicDuration || 'Não marcado'} 
                                       className="rounded-2xl bg-white/5 border-white/10 text-white h-12 font-mono font-bold w-[120px] text-center" 
+                                      id="asset-music-duration"
                                     />
                                     <Button
+                                      id="asset-btn-waveform-toggle"
                                       type="button"
                                       onClick={() => setIsWaveformOpen(!isWaveformOpen)}
                                       className="flex-1 bg-pink-500 hover:bg-pink-600 text-white rounded-2xl h-12 font-extrabold uppercase tracking-wider text-[9px] flex items-center justify-center gap-1.5 shadow-[0_0_15px_rgba(236,72,153,0.15)] transition-all"
@@ -1893,15 +1898,16 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                                     onChange={e => setNewAsset({...newAsset, musicDuration: e.target.value})} 
                                     placeholder="Ex: 01:20" 
                                     className="rounded-2xl bg-white/5 border-white/10 text-white h-12" 
+                                    id="asset-manual-music-duration"
                                   />
                                 </div>
                               )}
                             </div>
 
-                            {isWaveformOpen && durationMode === 'visual' && isUploadedFile(newAsset.musicUrl) && (
-                              <div className="mt-4 text-left w-full">
+                            {isWaveformOpen && durationMode === 'visual' && (isUploadedFile(newAsset.musicUrl) || !!localMusicBlobUrl) && (
+                              <div className="mt-4 text-left w-full" id="waveform-selector-container">
                                 <WaveformSelector
-                                  audioUrl={newAsset.musicUrl}
+                                  audioUrl={localMusicBlobUrl || newAsset.musicUrl || ''}
                                   musicName={newAsset.musicName || 'Sem nome'}
                                   initialDuration={newAsset.musicDuration}
                                   onConfirm={(timeStr) => {
