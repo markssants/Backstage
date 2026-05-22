@@ -180,11 +180,15 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
         }
       } catch (fallbackErr: any) {
         console.error("Ambos os envios falharam:", fallbackErr);
+        const errorMessage = fallbackErr?.message || String(fallbackErr);
         toast.custom((t) => (
           <div className="bg-slate-900 border border-red-500/30 p-4 rounded-xl text-white max-w-sm shadow-xl font-sans text-xs">
             <p className="font-bold text-red-400 mb-1">⚠️ Envio de Arquivo Indisponível</p>
-            <p className="text-slate-300 leading-normal mb-2">
+            <p className="text-slate-300 leading-normal mb-1">
               O Firebase Storage deste projeto não está ativado no Console do Firebase (Spark Plan) e o servidor local falhou.
+            </p>
+            <p className="text-red-400 bg-red-950/40 p-1.5 rounded font-mono text-[10px] mb-2 break-all border border-red-900/30">
+              Detalhes: {errorMessage}
             </p>
             <p className="text-purple-400 leading-normal">
               <strong>Alternativa Rápida:</strong> Clique em <b>"Colar Link / URL"</b> acima e insira um link direto do Drive, Dropbox, Soundcloud ou Youtube!

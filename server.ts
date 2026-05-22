@@ -19,30 +19,48 @@ async function startServer() {
     res.json({ status: "ok" });
   });
 
-  // Local file upload endpoint with 100MB limit using express.raw for ultimate robustness
-  app.post("/api/upload", express.raw({ type: "*/*", limit: "100mb" }), (req, res) => {
+  // Local file upload endpoint with stream-based piping for ultimate robustness and performance
+  app.post("/api/upload", (req, res) => {
     const filename = (req.query.filename as string) || "file";
+    console.log(`[Upload] Starting local stream-based upload for: ${filename}`);
+
     try {
       const decodedFilename = decodeURIComponent(filename);
       const safeFilename = `${Date.now()}_${decodedFilename.replace(/\s+/g, "_").replace(/[^a-zA-Z0-9.-]/g, "_")}`;
       
       const filePath = path.join(uploadsDir, safeFilename);
-      const buffer = req.body;
-
-      if (!buffer || buffer.length === 0) {
-        return res.status(400).json({ error: "Empty file payload received." });
-      }
-
-      fs.writeFile(filePath, buffer, (err) => {
-        if (err) {
-          console.error("Local file upload write error:", err);
-          return res.status(500).json({ error: "Failed to write file to local server storage." });
+      console.log(`[Upload] Target write path: ${filePath}`);
+      
+      const writeStream = fs.createWriteStream(filePath);
+      
+      req.on("error", (err) => {
+        console.error("[Upload] Request stream read error:", err);
+        writeStream.close();
+        if (!res.headersSent) {
+          res.status(500).json({ error: `Request stream read error: ${err.message}` });
         }
-        res.json({ url: `/uploads/${safeFilename}` });
       });
-    } catch (error) {
-      console.error("Local file upload error in payload:", error);
-      res.status(500).json({ error: "File upload initialization failed on server." });
+
+      writeStream.on("error", (err) => {
+        console.error("[Upload] Write stream error:", err);
+        if (!res.headersSent) {
+          res.status(500).json({ error: `Server storage write error: ${err.message}` });
+        }
+      });
+
+      writeStream.on("finish", () => {
+        console.log(`[Upload] File upload successfully completed: ${safeFilename}`);
+        if (!res.headersSent) {
+          res.json({ url: `/uploads/${safeFilename}` });
+        }
+      });
+
+      req.pipe(writeStream);
+    } catch (error: any) {
+      console.error("[Upload] Catch-all initialization error:", error);
+      if (!res.headersSent) {
+        res.status(500).json({ error: `File upload initialization error: ${error.message}` });
+      }
     }
   });
 
