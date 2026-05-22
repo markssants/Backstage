@@ -1,6 +1,23 @@
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 
+export function getGoogleDriveFileId(url: string | undefined): string | null {
+  if (!url) return null;
+  try {
+    const urlObj = new URL(url);
+    const idParam = urlObj.searchParams.get('id');
+    if (idParam) return idParam;
+  } catch (e) {}
+  
+  let match = url.match(/[?&]id=([^&]+)/);
+  if (match) return match[1];
+  
+  match = url.match(/\/file\/d\/([^\/]+)/);
+  if (match) return match[1];
+
+  return null;
+}
+
 export async function getDriveAccessToken(): Promise<string | null> {
   try {
     const docSnap = await getDoc(doc(db, 'settings', 'google_drive'));

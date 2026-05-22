@@ -4,7 +4,7 @@ import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../../firebase';
 import { DjAsset } from '../../types';
 import { WaveformSelector } from './WaveformSelector';
-import { getDriveAccessToken, uploadFileToGoogleDrive } from '../../lib/googleDrive';
+import { getDriveAccessToken, uploadFileToGoogleDrive, getGoogleDriveFileId } from '../../lib/googleDrive';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
@@ -67,6 +67,33 @@ function isUploadedFile(url: string | undefined): boolean {
          url.includes('/uploads/') || 
          url.includes('drive.google.com') || 
          url.includes('googleapis.com');
+}
+
+async function loadStoredAudioAsBlob(url: string | undefined, setBlobUrl: (u: string | null) => void) {
+  if (!url) return;
+  const fileId = getGoogleDriveFileId(url);
+  if (!fileId) return;
+
+  try {
+    const accessToken = await getDriveAccessToken();
+    if (accessToken) {
+      const gdriveUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
+      const response = await fetch(gdriveUrl, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`
+        }
+      });
+      if (response.ok) {
+        const blob = await response.blob();
+        const localBlobUrl = URL.createObjectURL(blob);
+        setBlobUrl(localBlobUrl);
+      } else {
+        console.warn("Could not fetch file content from Google Drive API:", response.statusText);
+      }
+    }
+  } catch (err) {
+    console.error("Error loading stored audio as blob:", err);
+  }
 }
 
 export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
@@ -292,6 +319,10 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
           setAgencies(data.agencies && data.agencies.length > 0 ? data.agencies : [{ name: '', link: '' }]);
           setLabels(data.labels && data.labels.length > 0 ? data.labels : [{ name: '', link: '' }]);
           setHasRecordLabel(!!(data.labels && data.labels.length > 0 && data.labels.some(l => l.name?.trim() || l.link?.trim())));
+          
+          if (data.musicUrl && (data.musicUrlType === 'file' || isFile)) {
+            loadStoredAudioAsBlob(data.musicUrl, setLocalMusicBlobUrl);
+          }
         } else {
           toast.error('DJ ou Atração não encontrada.');
         }

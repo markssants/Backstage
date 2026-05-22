@@ -15,7 +15,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "motion/react";
 import { WaveformSelector } from './WaveformSelector';
-import { getDriveAccessToken, uploadFileToGoogleDrive } from '../../lib/googleDrive';
+import { getDriveAccessToken, uploadFileToGoogleDrive, getGoogleDriveFileId } from '../../lib/googleDrive';
 
 interface DjAssetsProps {
   event: EventProject;
@@ -51,6 +51,33 @@ function isUploadedFile(url: string | undefined): boolean {
          url.includes('/uploads/') || 
          url.includes('drive.google.com') || 
          url.includes('googleapis.com');
+}
+
+async function loadStoredAudioAsBlob(url: string | undefined, setBlobUrl: (u: string | null) => void) {
+  if (!url) return;
+  const fileId = getGoogleDriveFileId(url);
+  if (!fileId) return;
+
+  try {
+    const accessToken = await getDriveAccessToken();
+    if (accessToken) {
+      const gdriveUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
+      const response = await fetch(gdriveUrl, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`
+        }
+      });
+      if (response.ok) {
+        const blob = await response.blob();
+        const localBlobUrl = URL.createObjectURL(blob);
+        setBlobUrl(localBlobUrl);
+      } else {
+        console.warn("Could not fetch file content from Google Drive API:", response.statusText);
+      }
+    }
+  } catch (err) {
+    console.error("Error loading stored audio as blob:", err);
+  }
 }
 
 export function DjAssets({ event, profile }: DjAssetsProps) {
@@ -390,6 +417,10 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
     setHasPlaylist(!!(asset.musicName || asset.musicUrl || asset.musicDuration));
     setHasRecordLabel(!!(asset.labels && asset.labels.length > 0 && asset.labels.some(l => l.name?.trim() || l.link?.trim())));
     setIsOpen(true);
+    
+    if (asset.musicUrl && (asset.musicUrlType === 'file' || isUploadedFile(asset.musicUrl))) {
+      loadStoredAudioAsBlob(asset.musicUrl, setLocalMusicBlobUrl);
+    }
   };
 
   const handleOpenCreate = () => {
