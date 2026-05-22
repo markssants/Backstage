@@ -107,7 +107,7 @@ export function Overview({ event, profile }: OverviewProps) {
         <div className="absolute bottom-0 left-0 w-96 h-96 bg-pink-600 rounded-full blur-[100px] opacity-10 -ml-48 -mb-48 pointer-events-none"></div>
         
         <div className="relative z-10 flex flex-col md:flex-row items-center gap-8">
-          <div className="w-32 h-32 md:w-40 md:h-40 rounded-3xl bg-white/5 backdrop-blur-md p-0 border border-white/20 shadow-2xl shrink-0 overflow-hidden group">
+          <div className="w-36 h-36 md:w-44 md:h-44 rounded-3xl bg-white/5 backdrop-blur-md p-0 border-0 shadow-2xl shrink-0 overflow-hidden group">
             <img src={event.logoUrl} alt={event.name} className="w-full h-full object-cover filter drop-shadow-[0_0_15px_rgba(255,255,255,0.3)] transition-transform group-hover:scale-110" />
           </div>
           <div className="text-center md:text-left space-y-4 flex-1">

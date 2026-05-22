@@ -25,7 +25,9 @@ interface DashboardProps {
 export function Dashboard({ profile }: DashboardProps) {
   const [activeView, setActiveView] = useState<ViewType>('overview');
   const [events, setEvents] = useState<EventProject[]>([]);
-  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(() => {
+    return localStorage.getItem('selectedEventId');
+  });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -41,8 +43,14 @@ export function Dashboard({ profile }: DashboardProps) {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const eventList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as EventProject));
       setEvents(eventList);
-      if (eventList.length > 0 && !selectedEventId) {
+
+      const savedEventId = localStorage.getItem('selectedEventId');
+      if (savedEventId && eventList.some(e => e.id === savedEventId)) {
+        setSelectedEventId(savedEventId);
+      } else if (eventList.length > 0) {
         setSelectedEventId(eventList[0].id);
+      } else {
+        setSelectedEventId(null);
       }
       setLoading(false);
     }, (error) => {
@@ -51,7 +59,15 @@ export function Dashboard({ profile }: DashboardProps) {
     });
 
     return () => unsubscribe();
-  }, [profile.id, profile.role, selectedEventId]);
+  }, [profile.id, profile.role]);
+
+  useEffect(() => {
+    if (selectedEventId) {
+      localStorage.setItem('selectedEventId', selectedEventId);
+    } else if (!loading && events.length === 0) {
+      localStorage.removeItem('selectedEventId');
+    }
+  }, [selectedEventId, loading, events.length]);
 
   const activeEvent = events.find(e => e.id === selectedEventId);
 

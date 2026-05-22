@@ -687,7 +687,7 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                     type="date"
                     value={newAsset.artDeadline || ''} 
                     onChange={e => setNewAsset({...newAsset, artDeadline: e.target.value})} 
-                    className="rounded-2xl bg-white/5 border-white/10 text-white h-12 [color-scheme:dark] px-5 font-bold" 
+                    className="rounded-2xl bg-white/5 border-white/10 text-white h-12 [color-scheme:dark] px-3 font-bold w-full max-w-[220px]" 
                   />
                 </div>
 
