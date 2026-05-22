@@ -1,6 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
 import { OperationType, FirestoreErrorInfo } from './types';
 import firebaseJson from '../firebase-applet-config.json';
 
@@ -28,6 +29,17 @@ export const db = hasRequiredConfig
   : ({} as any);
 
 export const auth = hasRequiredConfig ? getAuth(app) : ({} as any);
+
+let storageInstance: any = null;
+if (hasRequiredConfig) {
+  try {
+    storageInstance = getStorage(app);
+  } catch (error) {
+    console.error("Firebase Storage failed to initialize, probably because it is not enabled in the Firebase Console. Standard HTTP link fallback will be used:", error);
+  }
+}
+
+export const storage = storageInstance;
 
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
   const errInfo: FirestoreErrorInfo = {

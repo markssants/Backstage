@@ -48,11 +48,13 @@ export interface ArtTask {
 export interface DjAgency {
   name: string;
   link: string;
+  type?: 'link' | 'file';
 }
 
 export interface DjLabel {
   name: string;
   link: string;
+  type?: 'link' | 'file';
 }
 
 export interface DjAsset {
@@ -60,8 +62,10 @@ export interface DjAsset {
   eventId: string;
   name: string;
   presskitUrl?: string;
+  presskitType?: 'link' | 'file' | 'email';
   musicName?: string;
   musicUrl?: string;
+  musicUrlType?: 'link' | 'file';
   musicDuration?: string;
   artDeadline?: string;
   hasMandatoryLogo?: boolean;
@@ -70,7 +74,9 @@ export interface DjAsset {
   agencies?: DjAgency[];
   labels?: DjLabel[];
   flyerPhoto?: string;
+  flyerPhotoType?: 'link' | 'file';
   animationVideo?: string;
+  animationVideoType?: 'link' | 'file';
   priority?: 'low' | 'medium' | 'urgent';
   presskitStatus?: 'pending' | 'completed';
   createdAt: any;

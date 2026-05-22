@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, Music, ExternalLink, Clock, Trash2, Loader2, Disc, Calendar, ShieldAlert, BadgeCheck, Pencil, Film, Image, Sparkles, User, Share2 } from "lucide-react";
+import { Plus, Music, ExternalLink, Clock, Trash2, Loader2, Disc, Calendar, ShieldAlert, BadgeCheck, Pencil, Film, Image, Sparkles, User, Share2, Upload, Paperclip } from "lucide-react";
 import { EventProject, UserProfile, DjAsset, ArtTask } from "../../types";
 import { collection, query, onSnapshot, addDoc, serverTimestamp, deleteDoc, doc, getDocs, limit, orderBy, updateDoc } from "firebase/firestore";
-import { db, handleFirestoreError } from "../../firebase";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { db, storage, handleFirestoreError } from "../../firebase";
 import { OperationType } from "../../types";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -41,17 +42,21 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
   const [newAsset, setNewAsset] = useState<Partial<DjAsset>>({
     name: '',
     presskitUrl: '',
+    presskitType: 'link',
     musicName: '',
     musicUrl: '',
+    musicUrlType: 'link',
     musicDuration: '',
     artDeadline: '',
     hasMandatoryLogo: false,
     agencyInfo: '',
     labelInfo: '',
-    agencies: [{ name: '', link: '' }],
-    labels: [{ name: '', link: '' }],
+    agencies: [{ name: '', link: '', type: 'link' }],
+    labels: [{ name: '', link: '', type: 'link' }],
     flyerPhoto: '',
+    flyerPhotoType: 'link',
     animationVideo: '',
+    animationVideoType: 'link',
     priority: 'medium',
     presskitStatus: 'pending'
   });
@@ -59,6 +64,84 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
   const [hasVisualMaterial, setHasVisualMaterial] = useState(false);
   const [hasPlaylist, setHasPlaylist] = useState(false);
   const [hasRecordLabel, setHasRecordLabel] = useState(false);
+  const [uploadingState, setUploadingState] = useState<Record<string, boolean>>({});
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, fieldKey: string, allowedTypes: string[], maxSizeMB = 50) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!storage) {
+      toast.error("O serviço de upload direto (Firebase Storage) não está ativado no Console do Firebase deste projeto. Por favor, use links para os seus arquivos ou ative o Storage.");
+      return;
+    }
+
+    // Validate size
+    const fileSizeMB = file.size / (1024 * 1024);
+    if (fileSizeMB > maxSizeMB) {
+      toast.error(`O arquivo excede o limite de tamanho de ${maxSizeMB}MB.`);
+      return;
+    }
+
+    // Dynamic type check check
+    const fileExt = '.' + file.name.split('.').pop()?.toLowerCase();
+    const matchType = allowedTypes.length === 0 || allowedTypes.some(t => {
+      if (t.startsWith('.')) {
+        return fileExt === t;
+      }
+      return file.type.includes(t);
+    });
+
+    if (!matchType) {
+      toast.error(`Tipo de arquivo não permitido. Por favor envie um arquivo do tipo: ${allowedTypes.join(', ')}`);
+      return;
+    }
+
+    setUploadingState(prev => ({ ...prev, [fieldKey]: true }));
+
+    try {
+      const refinedFileName = `${Date.now()}_${file.name.replace(/\s+/g, '_')}`;
+      const storagePath = `events/${event.id}/dj_assets/${refinedFileName}`;
+      const fileRef = ref(storage, storagePath);
+      
+      await uploadBytes(fileRef, file);
+      const downloadUrl = await getDownloadURL(fileRef);
+      
+      if (fieldKey === 'presskit') {
+        setNewAsset(prev => ({ ...prev, presskitUrl: downloadUrl, presskitType: 'file' }));
+        toast.success("Documento do presskit (.zip) enviado com sucesso!");
+      } else if (fieldKey === 'flyerPhoto') {
+        setNewAsset(prev => ({ ...prev, flyerPhoto: downloadUrl, flyerPhotoType: 'file' }));
+        toast.success("Foto do flyer enviada com sucesso!");
+      } else if (fieldKey === 'animationVideo') {
+        setNewAsset(prev => ({ ...prev, animationVideo: downloadUrl, animationVideoType: 'file' }));
+        toast.success("Vídeo de animação enviado com sucesso!");
+      } else if (fieldKey === 'musicUrl') {
+        setNewAsset(prev => ({ ...prev, musicUrl: downloadUrl, musicUrlType: 'file' }));
+        toast.success("Música de entrada enviada com sucesso!");
+      } else if (fieldKey.startsWith('agency_')) {
+        const idx = parseInt(fieldKey.split('_')[1], 10);
+        const updated = [...(newAsset.agencies || [])];
+        if (updated[idx]) {
+          updated[idx] = { ...updated[idx], link: downloadUrl, type: 'file' };
+          setNewAsset(prev => ({ ...prev, agencies: updated }));
+        }
+        toast.success("Logo da agência enviada com sucesso!");
+      } else if (fieldKey.startsWith('label_')) {
+        const idx = parseInt(fieldKey.split('_')[1], 10);
+        const updated = [...(newAsset.labels || [])];
+        if (updated[idx]) {
+          updated[idx] = { ...updated[idx], link: downloadUrl, type: 'file' };
+          setNewAsset(prev => ({ ...prev, labels: updated }));
+        }
+        toast.success("Logo da gravadora enviada com sucesso!");
+      }
+    } catch (error) {
+      console.error("Erro no upload do arquivo:", error);
+      toast.error("Houve um erro ao enviar o arquivo.");
+    } finally {
+      setUploadingState(prev => ({ ...prev, [fieldKey]: false }));
+    }
+  };
 
   useEffect(() => {
     const q = query(collection(db, 'events', event.id, 'dj_assets'));
@@ -73,15 +156,25 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
   const handleOpenEdit = (asset: DjAsset) => {
     setEditingId(asset.id);
     const ags = asset.agencies && asset.agencies.length > 0
-      ? asset.agencies.map(a => ({ ...a }))
-      : [{ name: asset.agencyInfo || '', link: '' }];
+      ? asset.agencies.map(a => ({ 
+          ...a, 
+          type: a.type || (a.link && a.link.includes('firebasestorage') ? 'file' : 'link') 
+        }))
+      : [{ name: asset.agencyInfo || '', link: '', type: 'link' as const }];
     
     const labs = asset.labels && asset.labels.length > 0
-      ? asset.labels.map(l => ({ ...l }))
-      : [{ name: asset.labelInfo || '', link: '' }];
+      ? asset.labels.map(l => ({ 
+          ...l, 
+          type: l.type || (l.link && l.link.includes('firebasestorage') ? 'file' : 'link') 
+        }))
+      : [{ name: asset.labelInfo || '', link: '', type: 'link' as const }];
 
     setNewAsset({ 
       ...asset,
+      presskitType: asset.presskitType || (asset.presskitUrl && asset.presskitUrl.includes('firebasestorage') ? 'file' : 'link'),
+      flyerPhotoType: asset.flyerPhotoType || (asset.flyerPhoto && asset.flyerPhoto.includes('firebasestorage') ? 'file' : 'link'),
+      animationVideoType: asset.animationVideoType || (asset.animationVideo && asset.animationVideo.includes('firebasestorage') ? 'file' : 'link'),
+      musicUrlType: asset.musicUrlType || (asset.musicUrl && asset.musicUrl.includes('firebasestorage') ? 'file' : 'link'),
       agencies: ags,
       labels: labs
     });
@@ -252,17 +345,21 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
     setNewAsset({ 
       name: '', 
       presskitUrl: '', 
+      presskitType: 'link',
       musicName: '', 
       musicUrl: '', 
+      musicUrlType: 'link',
       musicDuration: '', 
       artDeadline: '', 
       hasMandatoryLogo: false, 
       agencyInfo: '', 
       labelInfo: '',
-      agencies: [{ name: '', link: '' }],
-      labels: [{ name: '', link: '' }],
+      agencies: [{ name: '', link: '', type: 'link' }],
+      labels: [{ name: '', link: '', type: 'link' }],
       flyerPhoto: '',
+      flyerPhotoType: 'link',
       animationVideo: '',
+      animationVideoType: 'link',
       priority: 'medium',
       presskitStatus: 'pending'
     });
@@ -376,11 +473,125 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                   <Input value={newAsset.name} onChange={e => setNewAsset({...newAsset, name: e.target.value})} placeholder="Ex: DJ Alok" className="rounded-2xl bg-white/5 border-white/10 text-white h-12" />
                 </div>
                 
-                <div className="space-y-2">
-                  <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400 flex items-center gap-1">
-                    Link do Presskit (Drive/Dropbox)
-                  </Label>
-                  <Input value={newAsset.presskitUrl} onChange={e => setNewAsset({...newAsset, presskitUrl: e.target.value})} placeholder="Link com fotos e release" className="rounded-2xl bg-white/5 border-white/10 text-white h-12" />
+                <div className="space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400 flex items-center gap-1">
+                      Como deseja enviar o Presskit?
+                    </Label>
+                    <div className="flex bg-white/5 p-0.5 rounded-xl border border-white/10 w-full sm:w-auto overflow-hidden">
+                      <button
+                        type="button"
+                        onClick={() => setNewAsset({...newAsset, presskitType: 'link'})}
+                        className={cn(
+                          "flex-1 sm:flex-initial rounded-lg text-[8px] font-black uppercase tracking-widest h-7 px-3 transition-all cursor-pointer truncate",
+                          (newAsset.presskitType || 'link') === 'link'
+                            ? "bg-purple-500/20 text-purple-400 border border-purple-500/30 shadow-inner"
+                            : "text-slate-500 hover:text-slate-300"
+                        )}
+                      >
+                        Link / URL
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setNewAsset({...newAsset, presskitType: 'file'})}
+                        className={cn(
+                          "flex-1 sm:flex-initial rounded-lg text-[8px] font-black uppercase tracking-widest h-7 px-3 transition-all cursor-pointer truncate",
+                          newAsset.presskitType === 'file'
+                            ? "bg-purple-500/20 text-purple-400 border border-purple-500/30 shadow-inner"
+                            : "text-slate-500 hover:text-slate-300"
+                        )}
+                      >
+                        Arquivo .zip
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setNewAsset({...newAsset, presskitType: 'email', presskitUrl: 'beysarts@gmail.com'})}
+                        className={cn(
+                          "flex-1 sm:flex-initial rounded-lg text-[8px] font-black uppercase tracking-widest h-7 px-3 transition-all cursor-pointer truncate",
+                          newAsset.presskitType === 'email'
+                            ? "bg-purple-500/20 text-purple-400 border border-purple-500/30 shadow-inner"
+                            : "text-slate-500 hover:text-slate-300"
+                        )}
+                      >
+                        Via E-mail
+                      </button>
+                    </div>
+                  </div>
+
+                  {(newAsset.presskitType || 'link') === 'link' ? (
+                    <Input 
+                      value={newAsset.presskitUrl || ''} 
+                      onChange={e => setNewAsset({...newAsset, presskitUrl: e.target.value})} 
+                      placeholder="Link com fotos e release (Drive/Dropbox)" 
+                      className="rounded-2xl bg-white/5 border-white/10 text-white h-12" 
+                    />
+                  ) : newAsset.presskitType === 'email' ? (
+                    <div className="space-y-3 p-4 rounded-2xl bg-purple-500/5 border border-purple-500/10">
+                      <p className="text-[11px] text-purple-300 font-bold leading-relaxed text-center sm:text-left font-sans">
+                        📨 O material (Presskit e fotos) deve ser enviado diretamente para o e-mail de nossa produção. Copie o endereço abaixo para enviar ou compartilhar:
+                      </p>
+                      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white/5 border border-white/10 p-3 rounded-xl">
+                        <div className="flex items-center gap-2 text-slate-200">
+                          <span className="text-sm">📧</span>
+                          <span className="text-xs font-mono font-bold tracking-wider select-all">beysarts@gmail.com</span>
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => {
+                            navigator.clipboard.writeText('beysarts@gmail.com');
+                            toast.success("E-mail copiado!");
+                          }}
+                          className="w-full sm:w-auto h-8 rounded-lg text-[9px] font-black uppercase tracking-widest px-3.5 bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 border border-purple-500/25 transition-all flex items-center justify-center gap-1.5"
+                        >
+                          Copiar E-mail
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="relative border border-dashed border-white/10 bg-white/[0.01] hover:bg-white/[0.03] transition-all rounded-2xl p-4 flex flex-col items-center justify-center min-h-[5rem]">
+                      {uploadingState['presskit'] ? (
+                        <div className="flex flex-col items-center gap-2">
+                          <Loader2 className="w-6 h-6 text-purple-400 animate-spin" />
+                          <span className="text-[10px] uppercase font-black tracking-widest text-slate-400">Enviando arquivo (.zip)...</span>
+                        </div>
+                      ) : newAsset.presskitUrl && newAsset.presskitUrl.includes('firebasestorage') ? (
+                        <div className="flex items-center justify-between w-full bg-emerald-500/10 border border-emerald-500/20 p-2.5 rounded-xl">
+                          <div className="flex items-center space-x-2 truncate">
+                            <Paperclip className="w-4 h-4 text-emerald-400 shrink-0" />
+                            <span className="text-xs text-emerald-400 font-bold truncate">Arquivo Presskit Pronto</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Label htmlFor="presskit-file-ref" className="text-[9px] uppercase font-black tracking-widest px-2.5 h-8 bg-purple-500/10 border border-purple-500/20 rounded-lg flex items-center justify-center cursor-pointer text-purple-400 hover:bg-purple-500/20 transition-all">
+                              Alterar
+                            </Label>
+                            <input
+                              id="presskit-file-ref"
+                              type="file"
+                              accept=".zip"
+                              onChange={(e) => handleFileUpload(e, 'presskit', ['.zip'])}
+                              className="hidden"
+                            />
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <label htmlFor="presskit-file-input" className="flex flex-col items-center gap-2 cursor-pointer w-full h-full py-4 text-center">
+                            <Upload className="w-6 h-6 text-slate-400 hover:text-purple-400 transition-colors" />
+                            <span className="text-xs text-slate-300 font-extrabold max-w-[200px] leading-tight">Escolher Presskit (.zip)</span>
+                            <span className="text-[9px] text-slate-500 font-medium uppercase tracking-wider">Clique para selecionar documento</span>
+                          </label>
+                          <input
+                            id="presskit-file-input"
+                            type="file"
+                            accept=".zip"
+                            onChange={(e) => handleFileUpload(e, 'presskit', ['.zip'])}
+                            className="hidden"
+                          />
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {editingId && (
@@ -534,7 +745,7 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                         <div className="space-y-3">
                           {newAsset.agencies?.map((agency, idx) => (
                             <div key={idx} className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-white/[0.01] border border-white/5 p-3 rounded-2xl relative">
-                              <div className="space-y-1">
+                              <div className="space-y-1 col-span-1 sm:col-span-2">
                                 <Label className="text-[9px] uppercase font-bold tracking-widest text-slate-400 flex items-center justify-between">
                                   <span>Nome da Agência <span className="text-pink-500 font-bold">*</span></span>
                                   {newAsset.agencies!.length > 1 && (
@@ -562,20 +773,102 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                                   className="rounded-xl bg-white/5 border-white/10 text-white h-10 px-4"
                                 />
                               </div>
-                              <div className="space-y-1">
+
+                              <div className="space-y-2 col-span-1 sm:col-span-2 border-t border-white/5 pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                                 <Label className="text-[9px] uppercase font-bold tracking-widest text-slate-400">
-                                  Link do Logo
+                                  Logo da Agência
                                 </Label>
-                                <Input 
-                                  value={agency.link} 
-                                  onChange={e => {
-                                    const updated = [...newAsset.agencies!];
-                                    updated[idx] = { ...updated[idx], link: e.target.value };
-                                    setNewAsset({ ...newAsset, agencies: updated });
-                                  }}
-                                  placeholder="Link ou caminho do arquivo"
-                                  className="rounded-xl bg-white/5 border-white/10 text-white h-10 px-4"
-                                />
+                                <div className="flex bg-white/5 p-0.5 rounded-xl border border-white/10 w-fit">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const updated = [...newAsset.agencies!];
+                                      updated[idx] = { ...updated[idx], type: 'link' };
+                                      setNewAsset({ ...newAsset, agencies: updated });
+                                    }}
+                                    className={cn(
+                                      "rounded-lg text-[8px] font-black uppercase tracking-widest h-6 px-2 transition-all cursor-pointer",
+                                      (agency.type || 'link') === 'link'
+                                        ? "bg-purple-500/20 text-purple-400 border border-purple-500/30 shadow-inner"
+                                        : "text-slate-500 hover:text-slate-300"
+                                    )}
+                                  >
+                                    Link / URL
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const updated = [...newAsset.agencies!];
+                                      updated[idx] = { ...updated[idx], type: 'file' };
+                                      setNewAsset({ ...newAsset, agencies: updated });
+                                    }}
+                                    className={cn(
+                                      "rounded-lg text-[8px] font-black uppercase tracking-widest h-6 px-2 transition-all cursor-pointer",
+                                      agency.type === 'file'
+                                        ? "bg-purple-500/20 text-purple-400 border border-purple-500/30 shadow-inner"
+                                        : "text-slate-500 hover:text-slate-300"
+                                    )}
+                                  >
+                                    Enviar Arquivo (.png, .jpg)
+                                  </button>
+                                </div>
+                              </div>
+
+                              <div className="col-span-1 sm:col-span-2">
+                                {(agency.type || 'link') === 'link' ? (
+                                  <Input 
+                                    value={agency.link} 
+                                    onChange={e => {
+                                      const updated = [...newAsset.agencies!];
+                                      updated[idx] = { ...updated[idx], link: e.target.value };
+                                      setNewAsset({ ...newAsset, agencies: updated });
+                                    }}
+                                    placeholder="Link ou caminho do arquivo"
+                                    className="rounded-xl bg-white/5 border-white/10 text-white h-10 px-4"
+                                  />
+                                ) : (
+                                  <div className="relative border border-dashed border-white/10 bg-white/[0.01] hover:bg-white/[0.03] transition-all rounded-xl p-3 flex flex-col items-center justify-center min-h-[4rem]">
+                                    {uploadingState[`agency_${idx}`] ? (
+                                      <div className="flex items-center gap-2">
+                                        <Loader2 className="w-4 h-4 text-purple-400 animate-spin" />
+                                        <span className="text-[9px] uppercase font-black tracking-widest text-slate-400">Enviando imagem...</span>
+                                      </div>
+                                    ) : agency.link && agency.link.includes('firebasestorage') ? (
+                                      <div className="flex items-center justify-between w-full bg-emerald-500/10 border border-emerald-500/20 p-2 rounded-lg">
+                                        <div className="flex items-center space-x-2 truncate">
+                                          <Paperclip className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                                          <span className="text-[10px] text-emerald-400 font-bold truncate">Logo Carregado</span>
+                                        </div>
+                                        <div className="flex items-center gap-1.5 item-center">
+                                          <Label htmlFor={`agency-file-${idx}`} className="text-[8px] uppercase font-black tracking-widest px-2 h-7 bg-purple-500/10 border border-purple-500/20 rounded flex items-center justify-center cursor-pointer text-purple-400 hover:bg-purple-500/20 transition-all">
+                                            Alterar
+                                          </Label>
+                                          <input
+                                            id={`agency-file-${idx}`}
+                                            type="file"
+                                            accept="image/*"
+                                            onChange={(e) => handleFileUpload(e, `agency_${idx}`, ['.png', '.jpg', '.jpeg', 'image/'])}
+                                            className="hidden"
+                                          />
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <>
+                                        <label htmlFor={`agency-file-input-${idx}`} className="flex flex-col items-center gap-1.5 cursor-pointer w-full text-center">
+                                          <Upload className="w-5 h-5 text-slate-400 hover:text-purple-400 transition-colors" />
+                                          <span className="text-[10px] text-slate-300 font-extrabold">Selecionar Logo (.png, .jpg)</span>
+                                        </label>
+                                        <input
+                                          id={`agency-file-input-${idx}`}
+                                          type="file"
+                                          accept="image/*"
+                                          onChange={(e) => handleFileUpload(e, `agency_${idx}`, ['.png', '.jpg', '.jpeg', 'image/'])}
+                                          className="hidden"
+                                        />
+                                      </>
+                                    )}
+                                  </div>
+                                )}
                               </div>
                             </div>
                           ))}
@@ -628,12 +921,12 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                               animate={{ opacity: 1, height: 'auto' }}
                               exit={{ opacity: 0, height: 0 }}
                               transition={{ duration: 0.2 }}
-                              className="space-y-3 overflow-hidden pt-1"
+                              className="space-y-3 overflow-hidden pt-1 font-bold"
                             >
                               <div className="space-y-3">
                                 {newAsset.labels?.map((label, idx) => (
                                   <div key={idx} className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-white/[0.01] border border-white/5 p-3 rounded-2xl relative">
-                                    <div className="space-y-1">
+                                    <div className="space-y-1 col-span-1 sm:col-span-2">
                                       <Label className="text-[9px] uppercase font-bold tracking-widest text-slate-400 flex items-center justify-between">
                                         <span>Nome da Gravadora <span className="text-pink-500 font-bold">*</span></span>
                                         {newAsset.labels!.length > 1 && (
@@ -661,20 +954,102 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                                         className="rounded-xl bg-white/5 border-white/10 text-white h-10 px-4"
                                       />
                                     </div>
-                                    <div className="space-y-1">
+
+                                    <div className="space-y-2 col-span-1 sm:col-span-2 border-t border-white/5 pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                                       <Label className="text-[9px] uppercase font-bold tracking-widest text-slate-400">
-                                        Link do Logo
+                                        Logo da Gravadora
                                       </Label>
-                                      <Input 
-                                        value={label.link} 
-                                        onChange={e => {
-                                          const updated = [...newAsset.labels!];
-                                          updated[idx] = { ...updated[idx], link: e.target.value };
-                                          setNewAsset({ ...newAsset, labels: updated });
-                                        }}
-                                        placeholder="Link ou caminho do arquivo"
-                                        className="rounded-xl bg-white/5 border-white/10 text-white h-10 px-4"
-                                      />
+                                      <div className="flex bg-white/5 p-0.5 rounded-xl border border-white/10 w-fit">
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const updated = [...newAsset.labels!];
+                                            updated[idx] = { ...updated[idx], type: 'link' };
+                                            setNewAsset({ ...newAsset, labels: updated });
+                                          }}
+                                          className={cn(
+                                            "rounded-lg text-[8px] font-black uppercase tracking-widest h-6 px-2 transition-all cursor-pointer",
+                                            (label.type || 'link') === 'link'
+                                              ? "bg-purple-500/20 text-purple-400 border border-purple-500/30 shadow-inner"
+                                              : "text-slate-500 hover:text-slate-300"
+                                          )}
+                                        >
+                                          Link / URL
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const updated = [...newAsset.labels!];
+                                            updated[idx] = { ...updated[idx], type: 'file' };
+                                            setNewAsset({ ...newAsset, labels: updated });
+                                          }}
+                                          className={cn(
+                                            "rounded-lg text-[8px] font-black uppercase tracking-widest h-6 px-2 transition-all cursor-pointer",
+                                            label.type === 'file'
+                                              ? "bg-purple-500/20 text-purple-400 border border-purple-500/30 shadow-inner"
+                                              : "text-slate-500 hover:text-slate-300"
+                                          )}
+                                        >
+                                          Enviar Logo (.png, .jpg)
+                                        </button>
+                                      </div>
+                                    </div>
+
+                                    <div className="col-span-1 sm:col-span-2">
+                                      {(label.type || 'link') === 'link' ? (
+                                        <Input 
+                                          value={label.link} 
+                                          onChange={e => {
+                                            const updated = [...newAsset.labels!];
+                                            updated[idx] = { ...updated[idx], link: e.target.value };
+                                            setNewAsset({ ...newAsset, labels: updated });
+                                          }}
+                                          placeholder="Link ou caminho do arquivo"
+                                          className="rounded-xl bg-white/5 border-white/10 text-white h-10 px-4"
+                                        />
+                                      ) : (
+                                        <div className="relative border border-dashed border-white/10 bg-white/[0.01] hover:bg-white/[0.03] transition-all rounded-xl p-3 flex flex-col items-center justify-center min-h-[4rem]">
+                                          {uploadingState[`label_${idx}`] ? (
+                                            <div className="flex items-center gap-2">
+                                              <Loader2 className="w-4 h-4 text-purple-400 animate-spin" />
+                                              <span className="text-[9px] uppercase font-black tracking-widest text-slate-400">Enviando imagem...</span>
+                                            </div>
+                                          ) : label.link && label.link.includes('firebasestorage') ? (
+                                            <div className="flex items-center justify-between w-full bg-emerald-500/10 border border-emerald-500/20 p-2 rounded-lg">
+                                              <div className="flex items-center space-x-2 truncate">
+                                                <Paperclip className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                                                <span className="text-[10px] text-emerald-400 font-bold truncate">Logo Carregado</span>
+                                              </div>
+                                              <div className="flex items-center gap-1.5 item-center">
+                                                <Label htmlFor={`label-file-${idx}`} className="text-[8px] uppercase font-black tracking-widest px-2 h-7 bg-purple-500/10 border border-purple-500/20 rounded flex items-center justify-center cursor-pointer text-purple-400 hover:bg-purple-500/20 transition-all">
+                                                  Alterar
+                                                </Label>
+                                                <input
+                                                  id={`label-file-${idx}`}
+                                                  type="file"
+                                                  accept="image/*"
+                                                  onChange={(e) => handleFileUpload(e, `label_${idx}`, ['.png', '.jpg', '.jpeg', 'image/'])}
+                                                  className="hidden"
+                                                />
+                                              </div>
+                                            </div>
+                                          ) : (
+                                            <>
+                                              <label htmlFor={`label-file-input-${idx}`} className="flex flex-col items-center gap-1.5 cursor-pointer w-full text-center">
+                                                <Upload className="w-5 h-5 text-slate-400 hover:text-purple-400 transition-colors" />
+                                                <span className="text-[10px] text-slate-300 font-extrabold">Selecionar Logo (.png, .jpg)</span>
+                                              </label>
+                                              <input
+                                                id={`label-file-input-${idx}`}
+                                                type="file"
+                                                accept="image/*"
+                                                onChange={(e) => handleFileUpload(e, `label_${idx}`, ['.png', '.jpg', '.jpeg', 'image/'])}
+                                                className="hidden"
+                                              />
+                                            </>
+                                          )}
+                                        </div>
+                                      )}
                                     </div>
                                   </div>
                                 ))}
@@ -687,7 +1062,7 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                                 size="sm" 
                                 onClick={() => {
                                   const updated = [...(newAsset.labels || [])];
-                                  updated.push({ name: '', link: '' });
+                                  updated.push({ name: '', link: '', type: 'link' });
                                   setNewAsset({ ...newAsset, labels: updated });
                                 }}
                                 className="w-full rounded-xl h-10 border-dashed border-white/10 hover:bg-white/5 font-black text-slate-400 uppercase tracking-widest text-[9px] flex items-center justify-center gap-1"
@@ -730,18 +1105,180 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                       transition={{ duration: 0.2 }}
                       className="space-y-4 overflow-hidden pt-2"
                     >
-                      <div className="space-y-2">
-                        <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400 flex items-center gap-1">
-                          Foto para o Flyer (Nome do arquivo que tá no drive ou Link) <span className="text-pink-500 font-bold">*</span>
-                        </Label>
-                        <Input value={newAsset.flyerPhoto || ''} onChange={e => setNewAsset({...newAsset, flyerPhoto: e.target.value})} placeholder="Ex: dj_promo.png ou link da foto" className="rounded-2xl bg-white/5 border-white/10 text-white h-12" />
-                      </div>
+                      <div className="space-y-4">
+                        {/* Foto do Flyer */}
+                        <div className="space-y-3 border-b border-white/5 pb-4">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400 flex items-center gap-1">
+                              Foto para o Flyer <span className="text-pink-500 font-bold">*</span>
+                            </Label>
+                            <div className="flex bg-white/5 p-0.5 rounded-xl border border-white/10 w-fit">
+                              <button
+                                type="button"
+                                onClick={() => setNewAsset({...newAsset, flyerPhotoType: 'link'})}
+                                className={cn(
+                                  "rounded-lg text-[8px] font-black uppercase tracking-widest h-7 px-2.5 transition-all cursor-pointer",
+                                  (newAsset.flyerPhotoType || 'link') === 'link'
+                                    ? "bg-purple-500/20 text-purple-400 border border-purple-500/30 shadow-inner"
+                                    : "text-slate-500 hover:text-slate-300"
+                                )}
+                              >
+                                Link / Texto
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setNewAsset({...newAsset, flyerPhotoType: 'file'})}
+                                className={cn(
+                                  "rounded-lg text-[8px] font-black uppercase tracking-widest h-7 px-2.5 transition-all cursor-pointer",
+                                  newAsset.flyerPhotoType === 'file'
+                                    ? "bg-purple-500/20 text-purple-400 border border-purple-500/30 shadow-inner"
+                                    : "text-slate-500 hover:text-slate-300"
+                                )}
+                              >
+                                Enviar Foto (.png, .jpg)
+                              </button>
+                            </div>
+                          </div>
 
-                      <div className="space-y-2">
-                        <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400 flex items-center gap-1">
-                          Vídeo para Animação (Nome do arquivo que tá no drive ou Link) <span className="text-pink-500 font-bold">*</span>
-                        </Label>
-                        <Input value={newAsset.animationVideo || ''} onChange={e => setNewAsset({...newAsset, animationVideo: e.target.value})} placeholder="Ex: painel_loop.mp4 ou link do drive" className="rounded-2xl bg-white/5 border-white/10 text-white h-12" />
+                          {(newAsset.flyerPhotoType || 'link') === 'link' ? (
+                            <Input 
+                              value={newAsset.flyerPhoto || ''} 
+                              onChange={e => setNewAsset({...newAsset, flyerPhoto: e.target.value})} 
+                              placeholder="Ex: dj_promo.png ou link da foto" 
+                              className="rounded-2xl bg-white/5 border-white/10 text-white h-12" 
+                            />
+                          ) : (
+                            <div className="relative border border-dashed border-white/10 bg-white/[0.01] hover:bg-white/[0.03] transition-all rounded-2xl p-4 flex flex-col items-center justify-center min-h-[5rem]">
+                              {uploadingState['flyerPhoto'] ? (
+                                <div className="flex flex-col items-center gap-2">
+                                  <Loader2 className="w-6 h-6 text-purple-400 animate-spin" />
+                                  <span className="text-[10px] uppercase font-black tracking-widest text-slate-400">Enviando foto...</span>
+                                </div>
+                              ) : newAsset.flyerPhoto && newAsset.flyerPhoto.includes('firebasestorage') ? (
+                                <div className="flex items-center justify-between w-full bg-emerald-500/10 border border-emerald-500/20 p-2.5 rounded-xl">
+                                  <div className="flex items-center space-x-2 truncate">
+                                    <Paperclip className="w-4 h-4 text-emerald-400 shrink-0" />
+                                    <span className="text-xs text-emerald-400 font-bold truncate">Foto de Flyer Pronta</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <Label htmlFor="flyer-file-ref" className="text-[9px] uppercase font-black tracking-widest px-2.5 h-8 bg-purple-500/10 border border-purple-500/20 rounded-lg flex items-center justify-center cursor-pointer text-purple-400 hover:bg-purple-500/20 transition-all">
+                                      Alterar
+                                    </Label>
+                                    <input
+                                      id="flyer-file-ref"
+                                      type="file"
+                                      accept="image/*"
+                                      onChange={(e) => handleFileUpload(e, 'flyerPhoto', ['.png', '.jpg', '.jpeg', 'image/'])}
+                                      className="hidden"
+                                    />
+                                  </div>
+                                </div>
+                              ) : (
+                                <>
+                                  <label htmlFor="flyer-file-input" className="flex flex-col items-center gap-2 cursor-pointer w-full h-full py-4 text-center">
+                                    <Upload className="w-6 h-6 text-slate-400 hover:text-purple-400 transition-colors" />
+                                    <span className="text-xs text-slate-300 font-extrabold max-w-[200px] leading-tight">Selecionar Imagem (.png, .jpg)</span>
+                                    <span className="text-[9px] text-slate-500 font-medium uppercase tracking-wider">Clique para selecionar imagem</span>
+                                  </label>
+                                  <input
+                                    id="flyer-file-input"
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={(e) => handleFileUpload(e, 'flyerPhoto', ['.png', '.jpg', '.jpeg', 'image/'])}
+                                    className="hidden"
+                                  />
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Vídeo do Motion */}
+                        <div className="space-y-3 pb-2">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400 flex items-center gap-1">
+                              Vídeo para Animação/Motion <span className="text-pink-500 font-bold">*</span>
+                            </Label>
+                            <div className="flex bg-white/5 p-0.5 rounded-xl border border-white/10 w-fit">
+                              <button
+                                type="button"
+                                onClick={() => setNewAsset({...newAsset, animationVideoType: 'link'})}
+                                className={cn(
+                                  "rounded-lg text-[8px] font-black uppercase tracking-widest h-7 px-2.5 transition-all cursor-pointer",
+                                  (newAsset.animationVideoType || 'link') === 'link'
+                                    ? "bg-purple-500/20 text-purple-400 border border-purple-500/30 shadow-inner"
+                                    : "text-slate-500 hover:text-slate-300"
+                                )}
+                              >
+                                Link / Texto
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setNewAsset({...newAsset, animationVideoType: 'file'})}
+                                className={cn(
+                                  "rounded-lg text-[8px] font-black uppercase tracking-widest h-7 px-2.5 transition-all cursor-pointer",
+                                  newAsset.animationVideoType === 'file'
+                                    ? "bg-purple-500/20 text-purple-400 border border-purple-500/30 shadow-inner"
+                                    : "text-slate-500 hover:text-slate-300"
+                                )}
+                              >
+                                Enviar Vídeo (.mp4)
+                              </button>
+                            </div>
+                          </div>
+
+                          {(newAsset.animationVideoType || 'link') === 'link' ? (
+                            <Input 
+                              value={newAsset.animationVideo || ''} 
+                              onChange={e => setNewAsset({...newAsset, animationVideo: e.target.value})} 
+                              placeholder="Ex: painel_loop.mp4 ou link do drive" 
+                              className="rounded-2xl bg-white/5 border-white/10 text-white h-12" 
+                            />
+                          ) : (
+                            <div className="relative border border-dashed border-white/10 bg-white/[0.01] hover:bg-white/[0.03] transition-all rounded-2xl p-4 flex flex-col items-center justify-center min-h-[5rem]">
+                              {uploadingState['animationVideo'] ? (
+                                <div className="flex flex-col items-center gap-2">
+                                  <Loader2 className="w-6 h-6 text-purple-400 animate-spin" />
+                                  <span className="text-[10px] uppercase font-black tracking-widest text-slate-400">Enviando vídeo (.mp4)...</span>
+                                </div>
+                              ) : newAsset.animationVideo && newAsset.animationVideo.includes('firebasestorage') ? (
+                                <div className="flex items-center justify-between w-full bg-emerald-500/10 border border-emerald-500/20 p-2.5 rounded-xl">
+                                  <div className="flex items-center space-x-2 truncate">
+                                    <Paperclip className="w-4 h-4 text-emerald-400 shrink-0" />
+                                    <span className="text-xs text-emerald-400 font-bold truncate">Vídeo para Motion Pronto</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <Label htmlFor="video-file-ref" className="text-[9px] uppercase font-black tracking-widest px-2.5 h-8 bg-purple-500/10 border border-purple-500/20 rounded-lg flex items-center justify-center cursor-pointer text-purple-400 hover:bg-purple-500/20 transition-all">
+                                      Alterar
+                                    </Label>
+                                    <input
+                                      id="video-file-ref"
+                                      type="file"
+                                      accept="video/*"
+                                      onChange={(e) => handleFileUpload(e, 'animationVideo', ['.mp4', '.mov', '.avi', 'video/'])}
+                                      className="hidden"
+                                    />
+                                  </div>
+                                </div>
+                              ) : (
+                                <>
+                                  <label htmlFor="video-file-input" className="flex flex-col items-center gap-2 cursor-pointer w-full h-full py-4 text-center">
+                                    <Upload className="w-6 h-6 text-slate-400 hover:text-purple-400 transition-colors" />
+                                    <span className="text-xs text-slate-300 font-extrabold max-w-[200px] leading-tight">Selecionar Vídeo (.mp4, .mov)</span>
+                                    <span className="text-[9px] text-slate-500 font-medium uppercase tracking-wider">Clique para selecionar arquivo de vídeo/motion</span>
+                                  </label>
+                                  <input
+                                    id="video-file-input"
+                                    type="file"
+                                    accept="video/*"
+                                    onChange={(e) => handleFileUpload(e, 'animationVideo', ['.mp4', '.mov', '.avi', 'video/'])}
+                                    className="hidden"
+                                  />
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </motion.div>
                   ) : (
@@ -781,19 +1318,106 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                         <Input value={newAsset.musicName || ''} onChange={e => setNewAsset({...newAsset, musicName: e.target.value})} placeholder="Ex: Hear Me Now" className="rounded-2xl bg-white/5 border-white/10 text-white h-12" />
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="space-y-2">
+                      <div className="space-y-4 border-t border-white/5 pt-3">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                           <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400 flex items-center gap-1">
-                            Link da Música (Spotify/Youtube)
+                            Link ou Arquivo da Música
                           </Label>
-                          <Input value={newAsset.musicUrl || ''} onChange={e => setNewAsset({...newAsset, musicUrl: e.target.value})} placeholder="Ex: Link do Spotify/Youtube" className="rounded-2xl bg-white/5 border-white/10 text-white h-12" />
+                          <div className="flex bg-white/5 p-0.5 rounded-xl border border-white/10 w-fit">
+                            <button
+                              type="button"
+                              onClick={() => setNewAsset({...newAsset, musicUrlType: 'link'})}
+                              className={cn(
+                                "rounded-lg text-[8px] font-black uppercase tracking-widest h-7 px-2.5 transition-all cursor-pointer",
+                                (newAsset.musicUrlType || 'link') === 'link'
+                                  ? "bg-purple-500/20 text-purple-400 border border-purple-500/30 shadow-inner"
+                                  : "text-slate-500 hover:text-slate-300"
+                              )}
+                            >
+                              Link / URL
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setNewAsset({...newAsset, musicUrlType: 'file'})}
+                              className={cn(
+                                "rounded-lg text-[8px] font-black uppercase tracking-widest h-7 px-2.5 transition-all cursor-pointer",
+                                newAsset.musicUrlType === 'file'
+                                  ? "bg-purple-500/20 text-purple-400 border border-purple-500/30 shadow-inner"
+                                  : "text-slate-500 hover:text-slate-300"
+                              )}
+                            >
+                              Enviar Áudio (.mp3, .wav)
+                            </button>
+                          </div>
                         </div>
-                        <div className="space-y-2">
-                          <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400 flex items-center gap-1">
-                            Duração / Minutos de Corte
-                          </Label>
-                          <Input value={newAsset.musicDuration || ''} onChange={e => setNewAsset({...newAsset, musicDuration: e.target.value})} placeholder="Ex: 01:20" className="rounded-2xl bg-white/5 border-white/10 text-white h-12" />
-                        </div>
+
+                        {(newAsset.musicUrlType || 'link') === 'link' ? (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400">
+                                Link da Música (Spotify/Youtube)
+                              </Label>
+                              <Input value={newAsset.musicUrl || ''} onChange={e => setNewAsset({...newAsset, musicUrl: e.target.value})} placeholder="Ex: Link do Spotify/Youtube" className="rounded-2xl bg-white/5 border-white/10 text-white h-12" />
+                            </div>
+                            <div className="space-y-2">
+                              <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400">
+                                Duração / Minutos de Corte
+                              </Label>
+                              <Input value={newAsset.musicDuration || ''} onChange={e => setNewAsset({...newAsset, musicDuration: e.target.value})} placeholder="Ex: 01:20" className="rounded-2xl bg-white/5 border-white/10 text-white h-12" />
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
+                            <div className="relative border border-dashed border-white/10 bg-white/[0.01] hover:bg-white/[0.03] transition-all rounded-2xl p-4 flex flex-col items-center justify-center min-h-[5rem]">
+                              {uploadingState['musicUrl'] ? (
+                                <div className="flex flex-col items-center gap-2">
+                                  <Loader2 className="w-6 h-6 text-purple-400 animate-spin" />
+                                  <span className="text-[10px] uppercase font-black tracking-widest text-slate-400">Enviando música...</span>
+                                </div>
+                              ) : newAsset.musicUrl && newAsset.musicUrl.includes('firebasestorage') ? (
+                                <div className="flex items-center justify-between w-full bg-emerald-500/10 border border-emerald-500/20 p-2.5 rounded-xl">
+                                  <div className="flex items-center space-x-2 truncate">
+                                    <Paperclip className="w-4 h-4 text-emerald-400 shrink-0" />
+                                    <span className="text-xs text-emerald-400 font-bold truncate">Música Pronta</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <Label htmlFor="music-file-ref" className="text-[9px] uppercase font-black tracking-widest px-2.5 h-8 bg-purple-500/10 border border-purple-500/20 rounded-lg flex items-center justify-center cursor-pointer text-purple-400 hover:bg-purple-500/20 transition-all">
+                                      Alterar
+                                    </Label>
+                                    <input
+                                      id="music-file-ref"
+                                      type="file"
+                                      accept="audio/*"
+                                      onChange={(e) => handleFileUpload(e, 'musicUrl', ['.mp3', '.wav', '.flac', '.m4a', 'audio/'])}
+                                      className="hidden"
+                                    />
+                                  </div>
+                                </div>
+                              ) : (
+                                <>
+                                  <label htmlFor="music-file-input" className="flex flex-col items-center gap-2 cursor-pointer w-full h-full py-4 text-center">
+                                    <Upload className="w-6 h-6 text-slate-400 hover:text-purple-400 transition-colors" />
+                                    <span className="text-xs text-slate-300 font-extrabold max-w-[200px] leading-tight">Escolher Música (MP3/WAV)</span>
+                                    <span className="text-[9px] text-slate-500 font-medium uppercase tracking-wider font-mono">Clique para selecionar áudio</span>
+                                  </label>
+                                  <input
+                                    id="music-file-input"
+                                    type="file"
+                                    accept="audio/*"
+                                    onChange={(e) => handleFileUpload(e, 'musicUrl', ['.mp3', '.wav', '.flac', '.m4a', 'audio/'])}
+                                    className="hidden"
+                                  />
+                                </>
+                              )}
+                            </div>
+                            <div className="space-y-2">
+                              <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400">
+                                Duração / Minutos de Corte
+                              </Label>
+                              <Input value={newAsset.musicDuration || ''} onChange={e => setNewAsset({...newAsset, musicDuration: e.target.value})} placeholder="Ex: 01:20" className="rounded-2xl bg-white/5 border-white/10 text-white h-12" />
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </motion.div>
                   ) : (
@@ -883,27 +1507,40 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                 </p>
                 {selectedViewAsset?.presskitUrl ? (
                   <div className="flex items-center justify-between p-3.5 bg-white/5 rounded-2xl border border-white/10">
-                    <span className="text-xs font-bold text-slate-200 truncate pr-4">{selectedViewAsset.presskitUrl}</span>
+                    <span className="text-xs font-bold text-slate-200 truncate pr-4">
+                      {selectedViewAsset.presskitType === 'email' ? `📨 E-mail: ${selectedViewAsset.presskitUrl}` : selectedViewAsset.presskitUrl}
+                    </span>
                     <div className="flex gap-2 shrink-0">
                       <Button
                         size="sm"
                         variant="secondary"
                         onClick={() => {
                           navigator.clipboard.writeText(selectedViewAsset.presskitUrl || '');
-                          toast.success("Link copiado!");
+                          toast.success("Copiado com sucesso!");
                         }}
                         className="h-8 rounded-xl text-[10px] uppercase font-black tracking-widest"
                       >
                         Copiar
                       </Button>
-                      <a
-                        href={selectedViewAsset.presskitUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center justify-center h-8 rounded-xl text-[10px] uppercase font-black tracking-widest bg-pink-500 text-white hover:bg-pink-600 px-3 transition-colors"
-                      >
-                        Acessar
-                      </a>
+                      {selectedViewAsset.presskitType === 'email' ? (
+                        selectedViewAsset.presskitUrl.includes('@') ? (
+                          <a
+                            href={`mailto:${selectedViewAsset.presskitUrl}`}
+                            className="inline-flex items-center justify-center h-8 rounded-xl text-[10px] uppercase font-black tracking-widest bg-purple-500 text-white hover:bg-purple-600 px-3 transition-colors"
+                          >
+                            Enviar E-mail
+                          </a>
+                        ) : null
+                      ) : (
+                        <a
+                          href={selectedViewAsset.presskitUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center justify-center h-8 rounded-xl text-[10px] uppercase font-black tracking-widest bg-pink-500 text-white hover:bg-pink-600 px-3 transition-colors"
+                        >
+                          Acessar
+                        </a>
+                      )}
                     </div>
                   </div>
                 ) : (
@@ -1274,19 +1911,37 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                     Link do Presskit & Fotos
                   </p>
                   {asset.presskitUrl ? (
-                    <a 
-                      href={asset.presskitUrl} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      className="flex items-center justify-between p-3.5 bg-white/5 rounded-2xl border border-white/10 hover:bg-white/10 transition-all group/link"
-                    >
-                      <div className="flex items-center space-x-3 truncate">
-                        <Music className="w-4 h-4 text-pink-400 shrink-0" />
-                        <span className="text-xs font-bold text-slate-200 truncate">{asset.presskitUrl}</span>
+                    asset.presskitType === 'email' ? (
+                      <div className="flex items-center justify-between p-3.5 bg-white/5 rounded-2xl border border-white/10">
+                        <div className="flex items-center space-x-3 truncate">
+                          <span className="text-xs shrink-0">📨</span>
+                          <span className="text-xs font-bold text-slate-200 truncate">E-mail: {asset.presskitUrl}</span>
+                        </div>
+                        {asset.presskitUrl.includes('@') && (
+                          <a 
+                            href={`mailto:${asset.presskitUrl}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="bg-purple-500/20 hover:bg-purple-500/35 text-purple-300 rounded-lg text-[8px] font-black uppercase tracking-widest h-6 px-2.5 flex items-center transition-colors shrink-0"
+                          >
+                            Enviar
+                          </a>
+                        )}
                       </div>
-                      <ExternalLink className="w-3.5 h-3.5 text-slate-500 group-hover/link:text-pink-400 transition-colors shrink-0" />
-                    </a>
+                    ) : (
+                      <a 
+                        href={asset.presskitUrl} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="flex items-center justify-between p-3.5 bg-white/5 rounded-2xl border border-white/10 hover:bg-white/10 transition-all group/link"
+                      >
+                        <div className="flex items-center space-x-3 truncate">
+                          <Music className="w-4 h-4 text-pink-400 shrink-0" />
+                          <span className="text-xs font-bold text-slate-200 truncate">{asset.presskitUrl}</span>
+                        </div>
+                        <ExternalLink className="w-3.5 h-3.5 text-slate-500 group-hover/link:text-pink-400 transition-colors shrink-0" />
+                      </a>
+                    )
                   ) : (
                     <div className="p-3.5 bg-rose-500/5 border border-rose-500/10 rounded-2xl flex items-center justify-between">
                       <span className="text-xs text-rose-400/80 font-bold italic">Não fornecido / Pendente</span>
