@@ -117,12 +117,17 @@ export function WaveformSelector({
           // Normalize to maximum of the track
           let normalized = max / trackMax;
           
-          // Apply a power function (e.g. power of 2.o) to exaggerate the contrast between quiet and loud sections.
-          // This avoids the flattened blocky look of highly compressed EDM tracks.
-          let highContrast = Math.pow(normalized, 2.0);
+          // Apply a non-linear dynamic range expansion to accentuate drops (high peaks) and breaks/vocals (low peaks)
+          // We shift the quiet parts down and stretch the loud parts back to the top.
+          const expandedThreshold = 0.30;
+          const expanded = normalized < expandedThreshold 
+            ? (normalized / expandedThreshold) * 0.12 // damp breaks/vocals very low
+            : 0.12 + ((normalized - expandedThreshold) / (1.0 - expandedThreshold)) * 0.88; // scale drops high
+          
+          const highContrast = Math.pow(expanded, 1.8);
           
           // Ensure it has a gentle minimum line so no section is completely invisible
-          parsedPeaks.push(Math.max(highContrast, 0.04));
+          parsedPeaks.push(Math.min(Math.max(highContrast, 0.05), 1.0));
         }
 
         setPeaks(parsedPeaks);
@@ -141,18 +146,17 @@ export function WaveformSelector({
           let base = 0.2;
           
           if (ratio < 0.15) { // Intro
-            base = 0.08 + Math.abs(Math.sin(ratio * Math.PI * 12)) * 0.18;
+            base = 0.05 + Math.abs(Math.sin(ratio * Math.PI * 12)) * 0.10;
           } else if (ratio >= 0.15 && ratio < 0.30) { // Build up wave
-            base = 0.15 + (ratio - 0.15) * 2.8 + Math.abs(Math.sin(ratio * Math.PI * 24)) * 0.14;
-          } else if (ratio >= 0.30 && ratio < 0.52) { // Massive Drop 1
-            // Sinusoidal pumping representing hard hitting bass and beats
-            base = 0.55 + Math.abs(Math.sin(ratio * Math.PI * 40)) * 0.42;
-          } else if (ratio >= 0.52 && ratio < 0.68) { // Deep breakdown (valleys)
-            base = 0.06 + Math.abs(Math.cos(ratio * Math.PI * 10)) * 0.14;
-          } else if (ratio >= 0.68 && ratio < 0.88) { // Climax Climax / Drop 2
-            base = 0.60 + Math.abs(Math.cos(ratio * Math.PI * 48)) * 0.38;
+            base = 0.10 + (ratio - 0.15) * 3.5 + Math.abs(Math.sin(ratio * Math.PI * 24)) * 0.08;
+          } else if (ratio >= 0.30 && ratio < 0.52) { // Massive Drop 1 (high pumping bass)
+            base = 0.75 + Math.abs(Math.sin(ratio * Math.PI * 36)) * 0.25;
+          } else if (ratio >= 0.52 && ratio < 0.68) { // Deep breakdown / Vocals / Breaks (super quiet)
+            base = 0.04 + Math.abs(Math.cos(ratio * Math.PI * 10)) * 0.08;
+          } else if (ratio >= 0.68 && ratio < 0.88) { // Climax drop 2 (loud pumping climax)
+            base = 0.80 + Math.abs(Math.cos(ratio * Math.PI * 44)) * 0.20;
           } else { // Outro
-            base = 0.22 - (ratio - 0.88) * 1.5 + Math.abs(Math.sin(ratio * Math.PI * 12)) * 0.12;
+            base = 0.15 - (ratio - 0.88) * 1.0 + Math.abs(Math.sin(ratio * Math.PI * 12)) * 0.06;
           }
           fallbackPeaks.push(Math.max(Math.min(base, 1.0), 0.04));
         }
