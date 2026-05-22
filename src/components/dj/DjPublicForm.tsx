@@ -19,7 +19,10 @@ import {
   Lock,
   Sparkles,
   ShieldCheck,
-  ChevronRight
+  ChevronRight,
+  Plus,
+  Trash2,
+  ShieldAlert
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
@@ -46,7 +49,10 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
   const [musicUrl, setMusicUrl] = useState('');
   const [musicDuration, setMusicDuration] = useState('');
 
-  // Logo info (Read-only)
+  // Logo info (Now editable by DJ)
+  const [hasMandatoryLogo, setHasMandatoryLogo] = useState(false);
+  const [agencies, setAgencies] = useState<{ name: string; link: string }[]>([]);
+  const [labels, setLabels] = useState<{ name: string; link: string }[]>([]);
   const [hasRecordLabel, setHasRecordLabel] = useState(false);
 
   useEffect(() => {
@@ -69,6 +75,10 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
 
           setHasVisualMaterial(!!(data.flyerPhoto || data.animationVideo));
           setHasPlaylist(!!(data.musicName || data.musicUrl || data.musicDuration));
+          
+          setHasMandatoryLogo(!!data.hasMandatoryLogo);
+          setAgencies(data.agencies && data.agencies.length > 0 ? data.agencies : [{ name: '', link: '' }]);
+          setLabels(data.labels && data.labels.length > 0 ? data.labels : [{ name: '', link: '' }]);
           setHasRecordLabel(!!(data.labels && data.labels.length > 0 && data.labels.some(l => l.name?.trim() || l.link?.trim())));
         } else {
           toast.error('DJ ou Atração não encontrada.');
@@ -89,7 +99,7 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
     if (saving) return;
 
     if (!presskitUrl.trim()) {
-      toast.error("O link do presskit é obrigatório.");
+      toast.error("O link do seu Presskit é obrigatório.");
       return;
     }
 
@@ -109,8 +119,12 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
         toast.error("Por favor, preencha o nome da música.");
         return;
       }
-      if (!musicUrl.trim()) {
-        toast.error("Por favor, preencha o link da música.");
+    }
+
+    if (hasMandatoryLogo) {
+      const activeAgencies = agencies.filter(a => a.name.trim() !== '');
+      if (activeAgencies.length === 0) {
+        toast.error("Por favor, preencha o nome de pelo menos uma Agência de Booking.");
         return;
       }
     }
@@ -127,13 +141,11 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
         musicUrl: hasPlaylist ? musicUrl.trim() : '',
         musicDuration: hasPlaylist ? musicDuration.trim() : '',
         presskitStatus: 'completed',
-        // Update readable logs as helper
-        labelInfo: asset?.hasMandatoryLogo && hasRecordLabel && asset?.labels 
-          ? asset.labels.map(l => `${l.name} (${l.link})`).join(', ') 
-          : asset?.labelInfo || '',
-        agencyInfo: asset?.hasMandatoryLogo && asset?.agencies 
-          ? asset.agencies.map(a => `${a.name} (${a.link})`).join(', ') 
-          : asset?.agencyInfo || '',
+        hasMandatoryLogo: hasMandatoryLogo,
+        agencies: hasMandatoryLogo ? agencies.filter(a => a.name.trim() !== '') : [],
+        labels: (hasMandatoryLogo && hasRecordLabel) ? labels.filter(l => l.name.trim() !== '') : [],
+        agencyInfo: hasMandatoryLogo ? agencies.filter(a => a.name.trim() !== '').map(a => `${a.name} (${a.link})`).join(', ') : '',
+        labelInfo: (hasMandatoryLogo && hasRecordLabel) ? labels.filter(l => l.name.trim() !== '').map(l => `${l.name} (${l.link})`).join(', ') : '',
       };
 
       await updateDoc(docRef, updateData);
@@ -280,64 +292,201 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
 
                 {/* 2 - Logos Obrigatórios (Agências e Gravadoras) */}
                 <div className="border-t border-white/5 pt-6 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-[11px] uppercase font-black tracking-widest text-slate-300 flex items-center gap-1.5">
+                  <div className="flex items-start sm:items-center justify-between gap-3">
+                    <Label className="text-[11px] uppercase font-black tracking-widest text-slate-300 flex items-center gap-1.5 cursor-pointer select-none" htmlFor="public-has-mandatory-logo">
                       <span className="w-5 h-5 rounded bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-[9px] shrink-0">2</span>
-                      <span className="leading-normal">Logos Obrigatórios (Agências e Gravadoras)</span>
+                      <span className="leading-normal">Possui Logos Obrigatórios (Agências e Gravadoras)</span>
                     </Label>
+                    <Checkbox 
+                      id="public-has-mandatory-logo" 
+                      checked={hasMandatoryLogo}
+                      onCheckedChange={(checked) => {
+                        const isChecked = checked === true;
+                        setHasMandatoryLogo(isChecked);
+                        if (isChecked && agencies.length === 0) {
+                          setAgencies([{ name: '', link: '' }]);
+                        }
+                      }}
+                      className="border-slate-500 data-[state=checked]:bg-amber-500 data-[state=checked]:border-amber-500 shrink-0 mt-0.5 sm:mt-0"
+                    />
                   </div>
-                  
-                  {asset.hasMandatoryLogo && ((asset.agencies && asset.agencies.length > 0 && asset.agencies.some(a => a.name)) || (asset.labels && asset.labels.length > 0 && asset.labels.some(l => l.name))) ? (
-                    <div className="bg-amber-500/5 border border-amber-500/10 rounded-2xl p-4 sm:p-5 space-y-4">
-                      <p className="text-xs text-slate-400 leading-relaxed">
-                        Sua assessoria configurou as seguintes logos obrigatórias para inserção em suas peças e flyers. Certifique-se de incluí-las na pasta de Presskit caso estejam em branco ou de enviá-las para os designers:
-                      </p>
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-                        {asset.agencies && asset.agencies.length > 0 && asset.agencies.some(a => a.name) && (
-                          <div className="space-y-2 bg-white/[0.02] border border-white/5 rounded-xl p-3">
-                            <p className="text-[9px] uppercase font-black tracking-widest text-slate-500">Agências de Booking:</p>
-                            <ul className="space-y-1.5">
-                              {asset.agencies.map((agency, i) => agency.name && (
-                                <li key={i} className="text-xs flex items-center justify-between font-bold text-slate-300">
-                                  <span className="truncate">{agency.name}</span>
-                                  {agency.link && (
-                                    <a href={agency.link} target="_blank" rel="noopener noreferrer" className="text-[10px] text-amber-400 hover:underline flex items-center gap-0.5">
-                                      Logo <ExternalLink className="w-2.5 h-2.5" />
-                                    </a>
-                                  )}
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
 
-                        {asset.labels && asset.labels.length > 0 && asset.labels.some(l => l.name) && (
-                          <div className="space-y-2 bg-white/[0.02] border border-white/5 rounded-xl p-3">
-                            <p className="text-[9px] uppercase font-black tracking-widest text-slate-500">Gravadoras / Labels:</p>
-                            <ul className="space-y-1.5">
-                              {asset.labels.map((label, i) => label.name && (
-                                <li key={i} className="text-xs flex items-center justify-between font-bold text-slate-300">
-                                  <span className="truncate">{label.name}</span>
-                                  {label.link && (
-                                    <a href={label.link} target="_blank" rel="noopener noreferrer" className="text-[10px] text-amber-400 hover:underline flex items-center gap-0.5">
-                                      Logo <ExternalLink className="w-2.5 h-2.5" />
-                                    </a>
-                                  )}
-                                </li>
-                              ))}
-                            </ul>
+                  <AnimatePresence initial={false}>
+                    {hasMandatoryLogo && (
+                      <motion.div 
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="space-y-5 overflow-hidden pt-2"
+                      >
+                        {/* Agências */}
+                        <div className="space-y-3">
+                          <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400">
+                            Agência / Bookings Obrigatória(s)
+                          </Label>
+                          
+                          <div className="space-y-3">
+                            {agencies.map((agency, idx) => (
+                              <div key={idx} className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-white/[0.01] border border-white/5 p-3 rounded-2xl relative">
+                                <div className="space-y-1">
+                                  <Label className="text-[9px] uppercase font-bold tracking-widest text-slate-400 flex items-center justify-between">
+                                    <span>Nome da Agência <span className="text-pink-500 font-bold">*</span></span>
+                                    {agencies.length > 1 && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const updated = [...agencies];
+                                          updated.splice(idx, 1);
+                                          setAgencies(updated);
+                                        }}
+                                        className="text-slate-500 hover:text-rose-500 transition-colors uppercase font-black text-[8px] tracking-wider"
+                                      >
+                                        Remover
+                                      </button>
+                                    )}
+                                  </Label>
+                                  <Input 
+                                    value={agency.name} 
+                                    onChange={e => {
+                                      const updated = [...agencies];
+                                      updated[idx] = { ...updated[idx], name: e.target.value };
+                                      setAgencies(updated);
+                                    }}
+                                    placeholder="Nome da Agência"
+                                    className="rounded-xl bg-white/5 border-white/10 text-white h-10 px-4 text-sm"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <Label className="text-[9px] uppercase font-bold tracking-widest text-slate-400">
+                                    Link do Logo (Opcional)
+                                  </Label>
+                                  <Input 
+                                    value={agency.link} 
+                                    onChange={e => {
+                                      const updated = [...agencies];
+                                      updated[idx] = { ...updated[idx], link: e.target.value };
+                                      setAgencies(updated);
+                                    }}
+                                    placeholder="Link do drive ou site"
+                                    className="rounded-xl bg-white/5 border-white/10 text-white h-10 px-4 text-sm"
+                                  />
+                                </div>
+                              </div>
+                            ))}
+                            
+                            <Button 
+                              type="button" 
+                              variant="outline" 
+                              size="sm" 
+                              onClick={() => {
+                                setAgencies([...agencies, { name: '', link: '' }]);
+                              }}
+                              className="w-full rounded-xl h-10 border-dashed border-white/10 hover:bg-white/5 font-black text-slate-400 uppercase tracking-widest text-[9px] flex items-center justify-center gap-1 bg-none"
+                            >
+                              <Plus className="w-3.5 h-3.5 text-amber-500" />
+                              Adicionar Outra Agência
+                            </Button>
                           </div>
-                        )}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-5 text-center">
-                      <p className="text-xs text-slate-400 italic">
-                        Nenhum logo obrigatório de agência ou gravadora foi exigido para este evento.
-                      </p>
-                    </div>
-                  )}
+                        </div>
+
+                        {/* Gravadora Checkbox */}
+                        <div className="flex items-center gap-2 pt-2">
+                          <Checkbox 
+                            id="public-has-record-label" 
+                            checked={hasRecordLabel}
+                            onCheckedChange={(checked) => {
+                              const isChecked = checked === true;
+                              setHasRecordLabel(isChecked);
+                              if (isChecked && labels.length === 0) {
+                                setLabels([{ name: '', link: '' }]);
+                              }
+                            }}
+                            className="border-slate-500 data-[state=checked]:bg-amber-500 data-[state=checked]:border-amber-500"
+                          />
+                          <Label htmlFor="public-has-record-label" className="text-[10px] uppercase font-black tracking-widest text-slate-300 cursor-pointer">
+                            Inserir Gravadora / Label Obrigatória
+                          </Label>
+                        </div>
+
+                        {/* Gravadora */}
+                        <AnimatePresence initial={false}>
+                          {hasRecordLabel && (
+                            <motion.div 
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: 'auto' }}
+                              exit={{ opacity: 0, height: 0 }}
+                              transition={{ duration: 0.15 }}
+                              className="space-y-3 overflow-hidden pt-1"
+                            >
+                              <div className="space-y-3">
+                                {labels.map((label, idx) => (
+                                  <div key={idx} className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-white/[0.01] border border-white/5 p-3 rounded-2xl relative">
+                                    <div className="space-y-1">
+                                      <Label className="text-[9px] uppercase font-bold tracking-widest text-slate-400 flex items-center justify-between">
+                                        <span>Nome da Gravadora <span className="text-pink-500 font-bold">*</span></span>
+                                        {labels.length > 1 && (
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              const updated = [...labels];
+                                              updated.splice(idx, 1);
+                                              setLabels(updated);
+                                            }}
+                                            className="text-slate-400 hover:text-rose-500 transition-colors uppercase font-black text-[8px] tracking-wider"
+                                          >
+                                            Remover
+                                          </button>
+                                        )}
+                                      </Label>
+                                      <Input 
+                                        value={label.name} 
+                                        onChange={e => {
+                                          const updated = [...labels];
+                                          updated[idx] = { ...updated[idx], name: e.target.value };
+                                          setLabels(updated);
+                                        }}
+                                        placeholder="Ex: Spinnin Records"
+                                        className="rounded-xl bg-white/5 border-white/10 text-white h-10 px-4 text-sm"
+                                      />
+                                    </div>
+                                    <div className="space-y-1">
+                                      <Label className="text-[9px] uppercase font-bold tracking-widest text-slate-400">
+                                        Link do Logo (Opcional)
+                                      </Label>
+                                      <Input 
+                                        value={label.link} 
+                                        onChange={e => {
+                                          const updated = [...labels];
+                                          updated[idx] = { ...updated[idx], link: e.target.value };
+                                          setLabels(updated);
+                                        }}
+                                        placeholder="Link do drive ou site"
+                                        className="rounded-xl bg-white/5 border-white/10 text-white h-10 px-4 text-sm"
+                                      />
+                                    </div>
+                                  </div>
+                                ))}
+
+                                <Button 
+                                  type="button" 
+                                  variant="outline" 
+                                  size="sm" 
+                                  onClick={() => {
+                                    setLabels([...labels, { name: '', link: '' }]);
+                                  }}
+                                  className="w-full rounded-xl h-10 border-dashed border-white/10 hover:bg-white/5 font-black text-slate-400 uppercase tracking-widest text-[9px] flex items-center justify-center gap-1 bg-none"
+                                >
+                                  <Plus className="w-3.5 h-3.5 text-amber-500" />
+                                  Adicionar Outra Gravadora
+                                </Button>
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
 
                 {/* 3 - Imagem de Apoio & Motion */}
@@ -416,7 +565,7 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           <div className="space-y-2">
                             <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400 flex items-center gap-1">
-                              Link da Música (Audio/YT/Spotify/Drive) <span className="text-pink-500 font-bold">*</span>
+                              Link da Música (Audio/YT/Spotify/Drive) (Opcional)
                             </Label>
                             <Input value={musicUrl} onChange={e => setMusicUrl(e.target.value)} placeholder="Ex: link do Spotify, Youtube, SoundCloud..." className="rounded-2xl bg-white/5 border-white/10 text-white h-11 sm:h-12 text-sm" />
                           </div>

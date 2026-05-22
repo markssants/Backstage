@@ -95,10 +95,6 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
       toast.error("O campo 'Nome do DJ / Atração' é obrigatório.");
       return;
     }
-    if (!newAsset.presskitUrl?.trim()) {
-      toast.error("O campo 'Link do Presskit' é obrigatório.");
-      return;
-    }
     if (!newAsset.priority) {
       toast.error("O campo 'Prioridade da Arte' é obrigatório.");
       return;
@@ -155,14 +151,6 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
     if (hasPlaylist) {
       if (!newAsset.musicName?.trim()) {
         toast.error("Faltando campo 'Nome da Música' na seção Trilha de Entrada.");
-        return;
-      }
-      if (!newAsset.musicUrl?.trim()) {
-        toast.error("Faltando campo 'Link da Música' na seção Trilha de Entrada.");
-        return;
-      }
-      if (!newAsset.musicDuration?.trim()) {
-        toast.error("Faltando campo 'Duração / Minutos de Corte' na seção Trilha de Entrada.");
         return;
       }
     }
@@ -382,7 +370,7 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                 
                 <div className="space-y-2">
                   <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400 flex items-center gap-1">
-                    Link do Presskit (Drive/Dropbox) <span className="text-pink-500 font-bold">*</span>
+                    Link do Presskit (Drive/Dropbox)
                   </Label>
                   <Input value={newAsset.presskitUrl} onChange={e => setNewAsset({...newAsset, presskitUrl: e.target.value})} placeholder="Link com fotos e release" className="rounded-2xl bg-white/5 border-white/10 text-white h-12" />
                 </div>
@@ -788,13 +776,13 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400 flex items-center gap-1">
-                            Link da Música <span className="text-pink-500 font-bold">*</span>
+                            Link da Música (Spotify/Youtube)
                           </Label>
                           <Input value={newAsset.musicUrl || ''} onChange={e => setNewAsset({...newAsset, musicUrl: e.target.value})} placeholder="Ex: Link do Spotify/Youtube" className="rounded-2xl bg-white/5 border-white/10 text-white h-12" />
                         </div>
                         <div className="space-y-2">
                           <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400 flex items-center gap-1">
-                            Duração / Minutos de Corte <span className="text-pink-500 font-bold">*</span>
+                            Duração / Minutos de Corte
                           </Label>
                           <Input value={newAsset.musicDuration || ''} onChange={e => setNewAsset({...newAsset, musicDuration: e.target.value})} placeholder="Ex: 01:20" className="rounded-2xl bg-white/5 border-white/10 text-white h-12" />
                         </div>
@@ -921,8 +909,8 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
             >
               <div className="bg-white/5 p-6 flex items-center justify-between border-b border-white/5">
                 <div className="flex items-center space-x-4 text-white">
-                  <div className="w-12 h-12 bg-gradient-to-tr from-purple-600 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg group-hover:rotate-12 transition-transform">
-                    <Disc className="w-7 h-7 text-white" />
+                  <div className="w-10 h-10 bg-gradient-to-tr from-purple-600 to-indigo-600 rounded-full flex items-center justify-center shadow-lg group-hover:rotate-12 transition-transform shrink-0">
+                    <Disc className="w-5 h-5 text-white" />
                   </div>
                   <div>
                     <h3 className="font-black text-lg uppercase tracking-tight text-white">{asset.name}</h3>
@@ -998,90 +986,212 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                     </Button>
                   </div>
               </div>
-              <CardContent className="p-6 space-y-6">
-                <div className="space-y-3">
-                  <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Recursos Visuais</p>
-                  <a 
-                    href={asset.presskitUrl} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                    className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/10 hover:bg-white/10 transition-all group/link"
-                  >
-                    <div className="flex items-center space-x-3">
-                      <Music className="w-4 h-4 text-pink-400" />
-                      <span className="text-sm font-bold text-slate-200">Ver Presskit & Fotos</span>
+              <CardContent className="p-6 space-y-5">
+                {/* 1 - Link do Presskit & Fotos */}
+                <div className="space-y-2">
+                  <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                    Link do Presskit & Fotos
+                  </p>
+                  {asset.presskitUrl ? (
+                    <a 
+                      href={asset.presskitUrl} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="flex items-center justify-between p-3.5 bg-white/5 rounded-2xl border border-white/10 hover:bg-white/10 transition-all group/link"
+                    >
+                      <div className="flex items-center space-x-3 truncate">
+                        <Music className="w-4 h-4 text-pink-400 shrink-0" />
+                        <span className="text-xs font-bold text-slate-200 truncate">{asset.presskitUrl}</span>
+                      </div>
+                      <ExternalLink className="w-3.5 h-3.5 text-slate-500 group-hover/link:text-pink-400 transition-colors shrink-0" />
+                    </a>
+                  ) : (
+                    <div className="p-3.5 bg-rose-500/5 border border-rose-500/10 rounded-2xl flex items-center justify-between">
+                      <span className="text-xs text-rose-400/80 font-bold italic">Não fornecido / Pendente</span>
+                      <span className="text-[8px] bg-rose-500/15 text-rose-400 px-2 py-0.5 rounded-full font-black uppercase tracking-widest shrink-0">Aguardando DJ</span>
                     </div>
-                    <ExternalLink className="w-3 h-3 text-slate-500 group-hover/link:text-pink-400 transition-colors" />
-                  </a>
+                  )}
                 </div>
 
-                {asset.hasMandatoryLogo && (
-                  <div className="space-y-3">
-                    <p className="text-[10px] text-amber-500/70 font-black uppercase tracking-widest flex items-center">
-                      <ShieldAlert className="w-3 h-3 mr-1.5" />
-                      Logos Mandatórios
-                    </p>
-                    <div className="bg-amber-500/5 border border-amber-500/10 rounded-2xl p-4 space-y-2">
-                      {asset.agencyInfo && (
-                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
-                          <span className="text-amber-500/60 mr-1">Agência:</span> {asset.agencyInfo}
-                        </p>
-                      )}
-                      {asset.labelInfo && (
-                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
-                          <span className="text-amber-500/60 mr-1">Gravadora:</span> {asset.labelInfo}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {asset.flyerPhoto && (
-                  <div className="space-y-3">
-                    <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Foto p/ Flyer</p>
-                    <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
-                      <p className="text-sm font-bold text-slate-200 truncate">{asset.flyerPhoto}</p>
-                    </div>
-                  </div>
-                )}
-
-                {asset.animationVideo && (
-                  <div className="space-y-3">
-                    <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Vídeo p/ Animação</p>
-                    <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
-                      <p className="text-sm font-bold text-slate-200 truncate">{asset.animationVideo}</p>
-                    </div>
-                  </div>
-                )}
-
-                <div className="space-y-3">
-                  <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Música de Entrada</p>
-                  <div className="p-5 bg-gradient-to-br from-indigo-500/10 to-purple-500/10 rounded-[1.5rem] border border-white/5 relative overflow-hidden group/track">
-                    <div className="flex items-center justify-between relative z-10">
-                      <div className="space-y-1">
-                        <p className="text-sm font-black text-white truncate max-w-[150px]">{asset.musicName || "Não informada"}</p>
-                        <div className="flex items-center space-x-2 text-slate-500">
-                          <Clock className="w-3 h-3 text-purple-400" />
-                          <span className="text-[10px] font-black uppercase">{asset.musicDuration || "--"}</span>
-                        </div>
+                {/* 2 - Logos Obrigatórios */}
+                <div className="space-y-2">
+                  <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest flex items-center gap-1.5">
+                    <ShieldAlert className="w-3.5 h-3.5 text-amber-500" />
+                    Logos Obrigatórios (Agências / Gravadoras)
+                  </p>
+                  {asset.hasMandatoryLogo ? (
+                    <div className="bg-amber-500/5 border border-amber-500/10 rounded-2xl p-4 space-y-3">
+                      {/* Agências */}
+                      <div>
+                        <p className="text-[8px] uppercase font-black tracking-widest text-amber-400/80 mb-1.5">Agência(s):</p>
+                        {asset.agencies && asset.agencies.length > 0 ? (
+                          <div className="space-y-1">
+                            {asset.agencies.map((agency, i) => (
+                              <div key={i} className="text-xs flex items-center justify-between font-bold text-slate-200 bg-white/[0.02] border border-white/5 rounded-xl px-3 py-1.5">
+                                <span className="truncate">{agency.name || '-'}</span>
+                                {agency.link ? (
+                                  <a 
+                                    href={agency.link} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer" 
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="text-[10px] text-pink-400 hover:text-pink-300 transition-colors flex items-center gap-0.5 pr-0.5"
+                                  >
+                                    Logo <ExternalLink className="w-2.5 h-2.5" />
+                                  </a>
+                                ) : (
+                                  <span className="text-[9px] text-slate-500 italic">Logo no Presskit</span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        ) : asset.agencyInfo ? (
+                          <p className="text-xs text-slate-300 font-bold bg-white/[0.02] border border-white/5 rounded-xl px-3 py-1.5">{asset.agencyInfo}</p>
+                        ) : (
+                          <p className="text-xs text-slate-500 italic">Ativo, mas nenhuma agência adicionada</p>
+                        )}
                       </div>
-                      {asset.musicUrl && (
-                        <a 
-                          href={asset.musicUrl} 
-                          target="_blank" 
-                          rel="noopener noreferrer" 
-                          onClick={(e) => e.stopPropagation()}
-                          className="hover:scale-110 transition-transform"
-                        >
-                          <Button size="icon" variant="ghost" className="rounded-full bg-white/10 hover:bg-pink-500 hover:text-white transition-all shadow-lg">
-                            <Music className="w-4 h-4" />
-                          </Button>
-                        </a>
-                      )}
+
+                      {/* Gravadoras */}
+                      <div>
+                        <p className="text-[8px] uppercase font-black tracking-widest text-amber-400/80 mb-1.5">Gravadora(s):</p>
+                        {asset.labels && asset.labels.length > 0 && asset.labels.some(l => l.name?.trim()) ? (
+                          <div className="space-y-1">
+                            {asset.labels.map((label, i) => label.name && (
+                              <div key={i} className="text-xs flex items-center justify-between font-bold text-slate-200 bg-white/[0.02] border border-white/5 rounded-xl px-3 py-1.5">
+                                <span className="truncate">{label.name}</span>
+                                {label.link ? (
+                                  <a 
+                                    href={label.link} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer" 
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="text-[10px] text-pink-400 hover:text-pink-300 transition-colors flex items-center gap-0.5 pr-0.5"
+                                  >
+                                    Logo <ExternalLink className="w-2.5 h-2.5" />
+                                  </a>
+                                ) : (
+                                  <span className="text-[9px] text-slate-500 italic">Logo no Presskit</span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        ) : asset.labelInfo ? (
+                          <p className="text-xs text-slate-300 font-bold bg-white/[0.02] border border-white/5 rounded-xl px-3 py-1.5">{asset.labelInfo}</p>
+                        ) : (
+                          <p className="text-xs text-slate-500 italic">Nenhuma gravadora adicionada</p>
+                        )}
+                      </div>
                     </div>
-                    <div className="absolute -bottom-6 -right-6 w-20 h-20 bg-purple-500/20 rounded-full blur-[20px] transition-all group-hover/track:scale-150 group-hover/track:bg-pink-500/20"></div>
+                  ) : (
+                    <div className="p-3 bg-white/5 border border-white/5 rounded-2xl">
+                      <p className="text-xs text-slate-550 font-bold italic text-slate-500">Nenhum logo obrigatório exigido</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* 3 - Foto Flyer e Vídeo Motion */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Foto p/ Flyer */}
+                  <div className="space-y-2">
+                    <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest flex items-center gap-1.5">
+                      <Image className="w-3.5 h-3.5 text-blue-400" />
+                      Foto p/ Flyer
+                    </p>
+                    {asset.flyerPhoto ? (
+                      <div className="bg-white/5 border border-white/10 p-3 rounded-2xl flex flex-col justify-between h-[84px] group/item">
+                        <p className="text-xs font-bold text-slate-200 line-clamp-2 leading-relaxed" title={asset.flyerPhoto}>{asset.flyerPhoto}</p>
+                        {asset.flyerPhoto.startsWith('http') && (
+                          <a 
+                            href={asset.flyerPhoto} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            onClick={(e) => e.stopPropagation()}
+                            className="text-[10px] text-blue-400 hover:text-blue-300 flex items-center gap-0.5 font-bold mt-1 max-w-max"
+                          >
+                            Acessar link <ExternalLink className="w-2.5 h-2.5" />
+                          </a>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="bg-white/[0.02] border border-white/5 p-3 rounded-2xl flex items-center justify-center h-[84px] border-dashed">
+                        <span className="text-xs text-slate-600 font-bold italic text-center">Pendente / Não enviada</span>
+                      </div>
+                    )}
                   </div>
+
+                  {/* Vídeo p/ Animação */}
+                  <div className="space-y-2">
+                    <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest flex items-center gap-1.5">
+                      <Film className="w-3.5 h-3.5 text-teal-400" />
+                      Vídeo p/ Motion
+                    </p>
+                    {asset.animationVideo ? (
+                      <div className="bg-white/5 border border-white/10 p-3 rounded-2xl flex flex-col justify-between h-[84px] group/item">
+                        <p className="text-xs font-bold text-slate-200 line-clamp-2 leading-relaxed" title={asset.animationVideo}>{asset.animationVideo}</p>
+                        {asset.animationVideo.startsWith('http') && (
+                          <a 
+                            href={asset.animationVideo} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            onClick={(e) => e.stopPropagation()}
+                            className="text-[10px] text-teal-400 hover:text-teal-300 flex items-center gap-0.5 font-bold mt-1 max-w-max"
+                          >
+                            Acessar link <ExternalLink className="w-2.5 h-2.5" />
+                          </a>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="bg-white/[0.02] border border-white/5 p-3 rounded-2xl flex items-center justify-center h-[84px] border-dashed">
+                        <span className="text-xs text-slate-600 font-bold italic text-center">Pendente / Não enviado</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* 4 - Trilha de Entrada (Música) */}
+                <div className="space-y-2">
+                  <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest flex items-center gap-1.5">
+                    <Music className="w-3.5 h-3.5 text-pink-400" />
+                    Música de Entrada (Track)
+                  </p>
+                  {asset.musicName ? (
+                    <div className="p-4 bg-gradient-to-br from-indigo-500/10 to-purple-500/10 rounded-[1.5rem] border border-white/5 relative overflow-hidden group/track">
+                      <div className="flex items-center justify-between relative z-10">
+                        <div className="space-y-1 select-none pr-3 min-w-0">
+                          <p className="text-sm font-black text-white truncate max-w-[200px]" title={asset.musicName}>{asset.musicName}</p>
+                          <div className="flex items-center space-x-2 text-slate-500">
+                            <Clock className="w-3 h-3 text-purple-400 animate-pulse" />
+                            <span className="text-[10px] font-black uppercase">{asset.musicDuration || "Duração não definida"}</span>
+                          </div>
+                        </div>
+                        {asset.musicUrl ? (
+                          <a 
+                            href={asset.musicUrl} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            onClick={(e) => e.stopPropagation()}
+                            className="hover:scale-110 transition-transform shrink-0"
+                            title="Ouvir Música"
+                          >
+                            <Button size="icon" variant="ghost" className="rounded-full bg-white/10 hover:bg-pink-500 hover:text-white transition-all shadow-lg w-9 h-9">
+                              <Music className="w-4 h-4" />
+                            </Button>
+                          </a>
+                        ) : (
+                          <span className="text-[10px] text-slate-500 italic font-bold shrink-0">Sem link</span>
+                        )}
+                      </div>
+                      <div className="absolute -bottom-6 -right-6 w-20 h-20 bg-purple-500/20 rounded-full blur-[20px] transition-all group-hover/track:scale-150 group-hover/track:bg-pink-500/20"></div>
+                    </div>
+                  ) : (
+                    <div className="p-4 bg-white/[0.02] border border-white/5 rounded-2xl border-dashed py-4 flex flex-col items-center justify-center space-y-1 text-slate-600">
+                      <p className="text-xs font-bold italic text-slate-500">Nenhuma trilha fornecida</p>
+                      <span className="text-[9px] font-black uppercase text-slate-600">Trilha de entrada livre ou padrão</span>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
