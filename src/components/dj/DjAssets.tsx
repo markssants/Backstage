@@ -14,6 +14,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "motion/react";
+import { WaveformSelector } from './WaveformSelector';
 
 interface DjAssetsProps {
   event: EventProject;
@@ -65,6 +66,8 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
   const [hasPlaylist, setHasPlaylist] = useState(false);
   const [hasRecordLabel, setHasRecordLabel] = useState(false);
   const [uploadingState, setUploadingState] = useState<Record<string, boolean>>({});
+  const [durationMode, setDurationMode] = useState<'time' | 'visual'>('time');
+  const [isWaveformOpen, setIsWaveformOpen] = useState(false);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, fieldKey: string, allowedTypes: string[], maxSizeMB = 50) => {
     const file = e.target.files?.[0];
@@ -178,6 +181,7 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
       agencies: ags,
       labels: labs
     });
+    setDurationMode(asset.musicUrl && asset.musicUrlType === 'file' ? 'visual' : 'time');
     setHasVisualMaterial(!!(asset.flyerPhoto || asset.animationVideo));
     setHasPlaylist(!!(asset.musicName || asset.musicUrl || asset.musicDuration));
     setHasRecordLabel(!!(asset.labels && asset.labels.length > 0 && asset.labels.some(l => l.name?.trim() || l.link?.trim())));
@@ -370,6 +374,8 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
     setHasVisualMaterial(false);
     setHasPlaylist(false);
     setHasRecordLabel(false);
+    setDurationMode('time');
+    setIsWaveformOpen(false);
   };
 
   const handleDelete = async (id: string) => {
@@ -1323,7 +1329,7 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                       </div>
 
                       <div className="space-y-4 border-t border-white/5 pt-3">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                           <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400 flex items-center gap-1">
                             Link ou Arquivo da Música
                           </Label>
@@ -1355,6 +1361,18 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                           </div>
                         </div>
 
+                        <div className="bg-purple-500/10 border border-purple-500/20 rounded-2xl p-3 flex.col sm:flex-row gap-2.5 items-start">
+                          <div className="flex gap-2 items-center">
+                            <Sparkles className="w-4 h-4 text-pink-400 shrink-0" />
+                            <p className="text-[10px] font-black uppercase tracking-wider text-pink-400">
+                              Destaque: Seleção Visual por Waveform Ativa! 🎧
+                            </p>
+                          </div>
+                          <p className="text-[10px] text-slate-300 leading-relaxed mt-1">
+                            Ao alternar para a opção <strong className="text-white">"Enviar Áudio (.mp3, .wav)"</strong> e realizar o upload da música direto do seu computador, você desbloqueia a ferramenta premium de <strong>corte visual por Waveform</strong>. Com ela, você pode ver as ondas sonoras, escutar a faixa e marcar o momento exato do Drop diretamente no gráfico sonoro!
+                          </p>
+                        </div>
+
                         {(newAsset.musicUrlType || 'link') === 'link' ? (
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div className="space-y-2">
@@ -1371,7 +1389,7 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                             </div>
                           </div>
                         ) : (
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
+                          <div className="space-y-4">
                             <div className="relative border border-dashed border-white/10 bg-white/[0.01] hover:bg-white/[0.03] transition-all rounded-2xl p-4 flex flex-col items-center justify-center min-h-[5rem]">
                               {uploadingState['musicUrl'] ? (
                                 <div className="flex flex-col items-center gap-2">
@@ -1414,11 +1432,80 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                                 </>
                               )}
                             </div>
-                            <div className="space-y-2">
-                              <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400">
-                                Duração / Minutos de Corte
-                              </Label>
-                              <Input value={newAsset.musicDuration || ''} onChange={e => setNewAsset({...newAsset, musicDuration: e.target.value})} placeholder="Ex: 01:20" className="rounded-2xl bg-white/5 border-white/10 text-white h-12" />
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-white/5 pt-3">
+                              <div className="space-y-2">
+                                <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400 flex items-center gap-1">
+                                  Como definir o tempo do Drop?
+                                </Label>
+                                <div className="flex bg-white/5 p-1 rounded-xl border border-white/10 w-full">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (newAsset.musicUrl && newAsset.musicUrl.includes('firebasestorage')) {
+                                        setDurationMode('visual');
+                                      } else {
+                                        toast.warning("Envie o arquivo de áudio (.mp3/wav) primeiro para habilitar a escolha visual!");
+                                      }
+                                    }}
+                                    className={cn(
+                                      "flex-1 rounded-lg text-[9px] font-black uppercase tracking-widest h-8 transition-all cursor-pointer",
+                                      durationMode === 'visual'
+                                        ? "bg-pink-500 text-white shadow-md font-bold"
+                                        : "text-slate-400 hover:text-slate-200"
+                                    )}
+                                  >
+                                    1: Escolher Visualmente
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setDurationMode('time')}
+                                    className={cn(
+                                      "flex-1 rounded-lg text-[9px] font-black uppercase tracking-widest h-8 transition-all cursor-pointer",
+                                      durationMode === 'time'
+                                        ? "bg-purple-500 text-white shadow-md font-bold"
+                                        : "text-slate-400 hover:text-slate-200"
+                                    )}
+                                  >
+                                    2: Escolher pelo Tempo
+                                  </button>
+                                </div>
+                              </div>
+
+                              {durationMode === 'visual' && newAsset.musicUrl && newAsset.musicUrl.includes('firebasestorage') ? (
+                                <div className="space-y-2">
+                                  <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400">
+                                    Corte / Drop Escolhido
+                                  </Label>
+                                  <div className="flex items-center gap-2">
+                                    <Input 
+                                      readOnly 
+                                      value={newAsset.musicDuration || 'Não marcado'} 
+                                      className="rounded-2xl bg-white/5 border-white/10 text-white h-12 font-mono font-bold w-[120px] text-center" 
+                                    />
+                                    <Button
+                                      type="button"
+                                      onClick={() => setIsWaveformOpen(true)}
+                                      className="flex-1 bg-pink-500 hover:bg-pink-600 text-white rounded-2xl h-12 font-extrabold uppercase tracking-wider text-[9px] flex items-center justify-center gap-1.5 shadow-[0_0_15px_rgba(236,72,153,0.15)] animate-pulse"
+                                    >
+                                      <Music className="w-3.5 h-3.5" />
+                                      {newAsset.musicDuration ? "Ajustar Drop" : "Marcar Drop Visualmente"}
+                                    </Button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="space-y-2">
+                                  <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400">
+                                    Duração / Minutos de Corte
+                                  </Label>
+                                  <Input 
+                                    value={newAsset.musicDuration || ''} 
+                                    onChange={e => setNewAsset({...newAsset, musicDuration: e.target.value})} 
+                                    placeholder="Ex: 01:20" 
+                                    className="rounded-2xl bg-white/5 border-white/10 text-white h-12" 
+                                  />
+                                </div>
+                              )}
                             </div>
                           </div>
                         )}
@@ -1451,6 +1538,16 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
           </DialogContent>
         </Dialog>
 
+        {isWaveformOpen && newAsset.musicUrl && (
+          <WaveformSelector
+            audioUrl={newAsset.musicUrl}
+            musicName={newAsset.musicName || 'Sem nome'}
+            initialDuration={newAsset.musicDuration}
+            onConfirm={(timeStr) => setNewAsset({ ...newAsset, musicDuration: timeStr })}
+            onClose={() => setIsWaveformOpen(false)}
+          />
+        )}
+
         <Dialog open={viewOpen} onOpenChange={setViewOpen}>
           <DialogContent className="rounded-[2rem] sm:max-w-[700px] w-[95vw] glass border-white/10 text-slate-100 p-4 sm:p-8 max-h-[92vh] overflow-hidden flex flex-col">
             <DialogHeader className="shrink-0 pb-4 border-b border-white/5">
@@ -1480,6 +1577,32 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
             </DialogHeader>
 
             <div className="flex-1 overflow-y-auto py-6 space-y-6 pr-1 custom-scrollbar">
+              {/* Link de Preenchimento Exclusivo para o DJ */}
+              {selectedViewAsset && (
+                <div className="bg-purple-500/10 border border-purple-500/20 p-4 rounded-xl sm:rounded-2xl flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
+                  <div className="space-y-0.5">
+                    <p className="text-[10px] uppercase font-black tracking-widest text-purple-400 font-extrabold">
+                      Link de Preenchimento Exclusivo para o DJ
+                    </p>
+                    <p className="text-[11px] text-slate-400 leading-relaxed">
+                      Envie este link para o próprio DJ preencher suas mídias diretamente, sem precisar de login ou visualizar outras partes do painel!
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      const shareUrl = `${window.location.origin}${window.location.pathname}?djShare=${event.id}_${selectedViewAsset.id}`;
+                      navigator.clipboard.writeText(shareUrl);
+                      toast.success("Link exclusivo copiado com sucesso!");
+                    }}
+                    className="rounded-xl h-11 sm:h-10 px-4 bg-purple-500 hover:bg-purple-600 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5 border-none shrink-0"
+                  >
+                    <Share2 className="w-3.5 h-3.5" />
+                    Copiar Link
+                  </Button>
+                </div>
+              )}
+
               {/* Row 1: Status Details */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="bg-white/[0.02] border border-white/5 p-4 rounded-2xl space-y-1">

@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import { db } from '../../firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db, storage } from '../../firebase';
 import { DjAsset } from '../../types';
+import { WaveformSelector } from './WaveformSelector';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -22,7 +25,9 @@ import {
   ChevronRight,
   Plus,
   Trash2,
-  ShieldAlert
+  ShieldAlert,
+  Upload,
+  Paperclip
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
@@ -48,6 +53,64 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
   const [musicName, setMusicName] = useState('');
   const [musicUrl, setMusicUrl] = useState('');
   const [musicDuration, setMusicDuration] = useState('');
+  const [musicUrlType, setMusicUrlType] = useState<'link' | 'file'>('link');
+  const [uploadingState, setUploadingState] = useState<Record<string, boolean>>({});
+  const [durationMode, setDurationMode] = useState<'time' | 'visual'>('time');
+  const [isWaveformOpen, setIsWaveformOpen] = useState(false);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, fieldKey: string, allowedTypes: string[], maxSizeMB = 50) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!storage) {
+      toast.error("O serviço de upload direto não está configurado.");
+      return;
+    }
+
+    // Validate size
+    const fileSizeMB = file.size / (1024 * 1024);
+    if (fileSizeMB > maxSizeMB) {
+      toast.error(`O arquivo excede o limite de tamanho de ${maxSizeMB}MB.`);
+      return;
+    }
+
+    // Validate type
+    const fileExt = '.' + file.name.split('.').pop()?.toLowerCase();
+    const matchType = allowedTypes.length === 0 || allowedTypes.some(t => {
+      if (t.startsWith('.')) {
+        return fileExt === t;
+      }
+      return file.type.includes(t);
+    });
+
+    if (!matchType) {
+      toast.error(`Tipo de arquivo não permitido. Por favor envie um arquivo do tipo: ${allowedTypes.join(', ')}`);
+      return;
+    }
+
+    setUploadingState(prev => ({ ...prev, [fieldKey]: true }));
+
+    try {
+      const refinedFileName = `${Date.now()}_${file.name.replace(/\s+/g, '_')}`;
+      const storagePath = `events/${eventId}/dj_assets/${refinedFileName}`;
+      const fileRef = ref(storage, storagePath);
+      
+      await uploadBytes(fileRef, file);
+      const downloadUrl = await getDownloadURL(fileRef);
+      
+      if (fieldKey === 'musicUrl') {
+        setMusicUrl(downloadUrl);
+        setMusicUrlType('file');
+        setDurationMode('visual'); // Switch to visual on successful upload!
+        toast.success("Música enviada com sucesso!");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Erro ao enviar o arquivo de música.");
+    } finally {
+      setUploadingState(prev => ({ ...prev, [fieldKey]: false }));
+    }
+  };
 
   // Logo info (Now editable by DJ)
   const [hasMandatoryLogo, setHasMandatoryLogo] = useState(false);
@@ -72,6 +135,10 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
           setMusicName(data.musicName || '');
           setMusicUrl(data.musicUrl || '');
           setMusicDuration(data.musicDuration || '');
+          
+          const isFile = !!(data.musicUrl && data.musicUrl.includes('firebasestorage'));
+          setMusicUrlType(data.musicUrlType || (isFile ? 'file' : 'link'));
+          setDurationMode(isFile ? 'visual' : 'time');
 
           setHasVisualMaterial(!!(data.flyerPhoto || data.animationVideo));
           setHasPlaylist(!!(data.musicName || data.musicUrl || data.musicDuration));
@@ -150,6 +217,7 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
         musicName: hasPlaylist ? musicName.trim() : '',
         musicUrl: hasPlaylist ? musicUrl.trim() : '',
         musicDuration: hasPlaylist ? musicDuration.trim() : '',
+        musicUrlType: hasPlaylist ? musicUrlType : 'link',
         presskitStatus: 'completed',
         hasMandatoryLogo: hasMandatoryLogo,
         agencies: hasMandatoryLogo ? agencies.filter(a => a.name.trim() !== '') : [],
@@ -572,20 +640,191 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
                           <Input value={musicName} onChange={e => setMusicName(e.target.value)} placeholder="Ex: Hear Me Now ou Out of Control" className="rounded-2xl bg-white/5 border-white/10 text-white h-11 sm:h-12 text-sm" />
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400 flex items-center gap-1">
-                              Link da Música (Audio/YT/Spotify/Drive) (Opcional)
-                            </Label>
-                            <Input value={musicUrl} onChange={e => setMusicUrl(e.target.value)} placeholder="Ex: link do Spotify, Youtube, SoundCloud..." className="rounded-2xl bg-white/5 border-white/10 text-white h-11 sm:h-12 text-sm" />
-                          </div>
-                          <div className="space-y-2">
-                            <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400 flex items-center gap-1">
-                              Melhor Minuto / Duração para Corte (Opcional)
-                            </Label>
-                            <Input value={musicDuration} onChange={e => setMusicDuration(e.target.value)} placeholder="Ex: De 01:20 a 01:45" className="rounded-2xl bg-white/5 border-white/10 text-white h-11 sm:h-12 text-sm" />
+                        <div className="space-y-3">
+                          <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400">
+                            Origem da Música
+                          </Label>
+                          <div className="flex bg-white/5 p-1 rounded-xl border border-white/10 w-full sm:w-fit">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMusicUrlType('link');
+                                if (durationMode === 'visual') {
+                                  setDurationMode('time');
+                                }
+                              }}
+                              className={cn(
+                                "flex-1 sm:flex-initial rounded-lg text-[9px] font-black uppercase tracking-widest h-8 px-4 transition-all cursor-pointer",
+                                musicUrlType === 'link'
+                                  ? "bg-purple-500 text-white shadow-md font-bold"
+                                  : "text-slate-500 hover:text-slate-300"
+                              )}
+                            >
+                              Colar Link / URL
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setMusicUrlType('file')}
+                              className={cn(
+                                "flex-1 sm:flex-initial rounded-lg text-[9px] font-black uppercase tracking-widest h-8 px-4 transition-all cursor-pointer",
+                                musicUrlType === 'file'
+                                  ? "bg-purple-500 text-white shadow-md font-bold"
+                                  : "text-slate-500 hover:text-slate-300"
+                              )}
+                            >
+                              Enviar Áudio (.mp3, .wav)
+                            </button>
                           </div>
                         </div>
+
+                        <div className="bg-purple-500/10 border border-purple-500/20 rounded-2xl p-3 flex.col sm:flex-row gap-2.5 items-start">
+                          <div className="flex gap-2 items-center">
+                            <Sparkles className="w-4 h-4 text-pink-400 shrink-0" />
+                            <p className="text-[10px] font-black uppercase tracking-wider text-pink-400">
+                              Novidade: Seleção Visual por Waveform Ativa! 🎧
+                            </p>
+                          </div>
+                          <p className="text-[10px] text-slate-300 leading-relaxed mt-1">
+                            Selecione a opção <strong className="text-white">"Enviar Áudio (.mp3, .wav)"</strong> e faça o upload direto do seu som para desbloquear o <strong>Corte Visual por Waveform</strong>. Você conseguirá ver o espectro de som da música, dar play e arrastar para pinçar o momento cirúrgico no qual o Drop deve acontecer!
+                          </p>
+                        </div>
+
+                        {musicUrlType === 'link' ? (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400 flex items-center gap-1">
+                                Link da Música (Spotify, Youtube, etc)
+                              </Label>
+                              <Input value={musicUrl} onChange={e => setMusicUrl(e.target.value)} placeholder="Ex: link do Spotify, Youtube, SoundCloud..." className="rounded-2xl bg-white/5 border-white/10 text-white h-11 sm:h-12 text-sm" />
+                            </div>
+                            <div className="space-y-2">
+                              <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400 flex items-center gap-1">
+                                Melhor Minuto / Duração para Corte (tempo)
+                              </Label>
+                              <Input value={musicDuration} onChange={e => setMusicDuration(e.target.value)} placeholder="Ex: De 01:20 a 01:45" className="rounded-2xl bg-white/5 border-white/10 text-white h-11 sm:h-12 text-sm" />
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="space-y-4">
+                            <div className="relative border border-dashed border-white/10 bg-white/[0.01] hover:bg-white/[0.03] transition-all rounded-2xl p-4 flex flex-col items-center justify-center min-h-[5rem]">
+                              {uploadingState['musicUrl'] ? (
+                                <div className="flex flex-col items-center gap-2">
+                                  <Loader2 className="w-6 h-6 text-purple-400 animate-spin" />
+                                  <span className="text-[10px] uppercase font-black tracking-widest text-slate-400">Enviando música...</span>
+                                </div>
+                              ) : musicUrl && musicUrl.includes('firebasestorage') ? (
+                                <div className="flex items-center justify-between w-full bg-emerald-500/10 border border-emerald-500/20 p-2.5 rounded-xl">
+                                  <div className="flex items-center space-x-2 truncate">
+                                    <Paperclip className="w-4 h-4 text-emerald-400 shrink-0" />
+                                    <span className="text-xs text-emerald-400 font-bold truncate">Música Enviada</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <Label htmlFor="public-music-file-ref" className="text-[9px] uppercase font-black tracking-widest px-2.5 h-8 bg-purple-500/10 border border-purple-500/20 rounded-lg flex items-center justify-center cursor-pointer text-purple-400 hover:bg-purple-500/20 transition-all">
+                                      Alterar
+                                    </Label>
+                                    <input
+                                      id="public-music-file-ref"
+                                      type="file"
+                                      accept="audio/*"
+                                      onChange={(e) => handleFileUpload(e, 'musicUrl', ['.mp3', '.wav', '.flac', '.m4a', 'audio/'])}
+                                      className="hidden"
+                                    />
+                                  </div>
+                                </div>
+                              ) : (
+                                <>
+                                  <label htmlFor="public-music-file-input" className="flex flex-col items-center gap-2 cursor-pointer w-full h-full py-4 text-center">
+                                    <Upload className="w-6 h-6 text-slate-400 hover:text-purple-400 transition-colors" />
+                                    <span className="text-xs text-slate-300 font-extrabold max-w-[200px] leading-tight">Escolher Música (MP3/WAV)</span>
+                                    <span className="text-[9px] text-slate-500 font-medium uppercase tracking-wider font-mono">Clique para selecionar áudio</span>
+                                  </label>
+                                  <input
+                                    id="public-music-file-input"
+                                    type="file"
+                                    accept="audio/*"
+                                    onChange={(e) => handleFileUpload(e, 'musicUrl', ['.mp3', '.wav', '.flac', '.m4a', 'audio/'])}
+                                    className="hidden"
+                                  />
+                                </>
+                              )}
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-white/5 pt-3">
+                              <div className="space-y-2">
+                                <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400 flex items-center gap-1">
+                                  Como definir o tempo do Drop?
+                                </Label>
+                                <div className="flex bg-white/5 p-1 rounded-xl border border-white/10 w-full">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (musicUrl && musicUrl.includes('firebasestorage')) {
+                                        setDurationMode('visual');
+                                      } else {
+                                        toast.warning("Envie o arquivo de áudio (.mp3/wav) primeiro para habilitar a escolha visual!");
+                                      }
+                                    }}
+                                    className={cn(
+                                      "flex-1 rounded-lg text-[9px] font-black uppercase tracking-widest h-8 transition-all cursor-pointer",
+                                      durationMode === 'visual'
+                                        ? "bg-pink-500 text-white shadow-md font-bold"
+                                        : "text-slate-400 hover:text-slate-200"
+                                    )}
+                                  >
+                                    1: Escolher Visualmente
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setDurationMode('time')}
+                                    className={cn(
+                                      "flex-1 rounded-lg text-[9px] font-black uppercase tracking-widest h-8 transition-all cursor-pointer",
+                                      durationMode === 'time'
+                                        ? "bg-purple-500 text-white shadow-md font-bold"
+                                        : "text-slate-400 hover:text-slate-200"
+                                    )}
+                                  >
+                                    2: Escolher pelo Tempo
+                                  </button>
+                                </div>
+                              </div>
+
+                              {durationMode === 'visual' && musicUrl && musicUrl.includes('firebasestorage') ? (
+                                <div className="space-y-2">
+                                  <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400">
+                                    Corte / Drop Escolhido
+                                  </Label>
+                                  <div className="flex items-center gap-2">
+                                    <Input 
+                                      readOnly 
+                                      value={musicDuration || 'Não marcado'} 
+                                      className="rounded-2xl bg-white/5 border-white/10 text-white h-12 font-mono font-bold w-[120px] text-center" 
+                                    />
+                                    <Button
+                                      type="button"
+                                      onClick={() => setIsWaveformOpen(true)}
+                                      className="flex-1 bg-pink-500 hover:bg-pink-600 text-white rounded-2xl h-11 sm:h-12 font-extrabold uppercase tracking-wider text-[9px] flex items-center justify-center gap-1.5 shadow-[0_0_15px_rgba(236,72,153,0.15)] animate-pulse"
+                                    >
+                                      <Music className="w-3.5 h-3.5" />
+                                      {musicDuration ? "Ajustar Drop" : "Marcar Drop Visualmente"}
+                                    </Button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="space-y-2">
+                                  <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400">
+                                    Melhor Minuto / Duração para Corte (tempo)
+                                  </Label>
+                                  <Input 
+                                    value={musicDuration} 
+                                    onChange={e => setMusicDuration(e.target.value)} 
+                                    placeholder="Ex: De 01:20 a 01:45" 
+                                    className="rounded-2xl bg-white/5 border-white/10 text-white h-11 sm:h-12 text-sm" 
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
                       </motion.div>
                     )}
                   </AnimatePresence>
@@ -615,6 +854,16 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {isWaveformOpen && musicUrl && (
+          <WaveformSelector
+            audioUrl={musicUrl}
+            musicName={musicName || 'Sem nome'}
+            initialDuration={musicDuration}
+            onConfirm={(timeStr) => setMusicDuration(timeStr)}
+            onClose={() => setIsWaveformOpen(false)}
+          />
+        )}
       </div>
     </div>
   );
