@@ -104,9 +104,10 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
         setDurationMode('visual'); // Switch to visual on successful upload!
         toast.success("Música enviada com sucesso!");
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      toast.error("Erro ao enviar o arquivo de música.");
+      const errMsg = err?.message || String(err);
+      toast.error(`Erro ao enviar o arquivo de música: ${errMsg}. Verifique se o Firebase Storage está ativo com permissões de gravação.`);
     } finally {
       setUploadingState(prev => ({ ...prev, [fieldKey]: false }));
     }
@@ -170,14 +171,19 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
       return;
     }
 
-    if (hasVisualMaterial) {
-      if (!flyerPhoto.trim()) {
-        toast.error("Por favor, preencha a foto para o Flyer.");
-        return;
+    if (hasVisualMaterial && asset) {
+      const vProps = asset.visualMaterialType || 'both';
+      if (vProps === 'both' || vProps === 'photo') {
+        if (!flyerPhoto.trim()) {
+          toast.error("Por favor, preencha a foto para o Flyer.");
+          return;
+        }
       }
-      if (!animationVideo.trim()) {
-        toast.error("Por favor, preencha o vídeo para Animação/Motion.");
-        return;
+      if (vProps === 'both' || vProps === 'video') {
+        if (!animationVideo.trim()) {
+          toast.error("Por favor, preencha o vídeo para Animação/Motion.");
+          return;
+        }
       }
     }
 
@@ -210,10 +216,11 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
     try {
       const docRef = doc(db, 'events', eventId, 'dj_assets', assetId);
       
+      const vProps = asset?.visualMaterialType || 'both';
       const updateData: Partial<DjAsset> = {
         presskitUrl: presskitUrl.trim(),
-        flyerPhoto: hasVisualMaterial ? flyerPhoto.trim() : '',
-        animationVideo: hasVisualMaterial ? animationVideo.trim() : '',
+        flyerPhoto: hasVisualMaterial && (vProps === 'both' || vProps === 'photo') ? flyerPhoto.trim() : '',
+        animationVideo: hasVisualMaterial && (vProps === 'both' || vProps === 'video') ? animationVideo.trim() : '',
         musicName: hasPlaylist ? musicName.trim() : '',
         musicUrl: hasPlaylist ? musicUrl.trim() : '',
         musicDuration: hasPlaylist ? musicDuration.trim() : '',
@@ -572,7 +579,14 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
                   <div className="flex items-start sm:items-center justify-between gap-3">
                     <Label className="text-[11px] uppercase font-black tracking-widest text-slate-300 flex items-center gap-1.5 cursor-pointer select-none" htmlFor="public-has-visual-material">
                       <span className="w-5 h-5 rounded bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-[9px] shrink-0">3</span>
-                      <span className="leading-normal">Escolher Foto e Vídeo Específica</span>
+                      <span className="leading-normal">
+                        {(() => {
+                          const vProps = asset?.visualMaterialType || 'both';
+                          if (vProps === 'photo') return 'Escolher apenas Foto';
+                          if (vProps === 'video') return 'Escolher apenas Vídeo';
+                          return 'Escolher Foto e Vídeo Específica';
+                        })()}
+                      </span>
                     </Label>
                     <Checkbox 
                       id="public-has-visual-material" 
@@ -591,19 +605,31 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
                         transition={{ duration: 0.2 }}
                         className="space-y-4 overflow-hidden pt-2"
                       >
-                        <div className="space-y-2">
-                          <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400 flex items-center gap-1">
-                            Foto para o Flyer (Ex: Nome do arquivo no Drive ou Link do Drive) <span className="text-pink-500 font-bold">*</span>
-                          </Label>
-                          <Input value={flyerPhoto} onChange={e => setFlyerPhoto(e.target.value)} placeholder="Ex: foto_oficial_pink.png ou link da foto" className="rounded-2xl bg-white/5 border-white/10 text-white h-11 sm:h-12 text-sm" />
-                        </div>
+                        {/* Only show Foto if visualMaterialType is 'photo' or 'both' */}
+                        {(() => {
+                          const vProps = asset?.visualMaterialType || 'both';
+                          return (vProps === 'photo' || vProps === 'both') && (
+                            <div className="space-y-2">
+                              <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400 flex items-center gap-1">
+                                Foto para o Flyer (Ex: Nome do arquivo no Drive ou Link do Drive) <span className="text-pink-500 font-bold">*</span>
+                              </Label>
+                              <Input value={flyerPhoto} onChange={e => setFlyerPhoto(e.target.value)} placeholder="Ex: foto_oficial_pink.png ou link da foto" className="rounded-2xl bg-white/5 border-white/10 text-white h-11 sm:h-12 text-sm" />
+                            </div>
+                          );
+                        })()}
 
-                        <div className="space-y-2">
-                          <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400 flex items-center gap-1">
-                            Vídeo para Animação / Painel (Nome do arquivo no Drive ou Link do GDrive) <span className="text-pink-500 font-bold">*</span>
-                          </Label>
-                          <Input value={animationVideo} onChange={e => setAnimationVideo(e.target.value)} placeholder="Ex: painel_loop_dj.mp4 ou link do drive" className="rounded-2xl bg-white/5 border-white/10 text-white h-11 sm:h-12 text-sm" />
-                        </div>
+                        {/* Only show Video if visualMaterialType is 'video' or 'both' */}
+                        {(() => {
+                          const vProps = asset?.visualMaterialType || 'both';
+                          return (vProps === 'video' || vProps === 'both') && (
+                            <div className="space-y-2">
+                              <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400 flex items-center gap-1">
+                                Vídeo para Animação / Painel (Nome do arquivo no Drive ou Link do GDrive) <span className="text-pink-500 font-bold">*</span>
+                              </Label>
+                              <Input value={animationVideo} onChange={e => setAnimationVideo(e.target.value)} placeholder="Ex: painel_loop_dj.mp4 ou link do drive" className="rounded-2xl bg-white/5 border-white/10 text-white h-11 sm:h-12 text-sm" />
+                            </div>
+                          );
+                        })()}
                       </motion.div>
                     )}
                   </AnimatePresence>

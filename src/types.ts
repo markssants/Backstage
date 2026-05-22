@@ -77,6 +77,7 @@ export interface DjAsset {
   flyerPhotoType?: 'link' | 'file';
   animationVideo?: string;
   animationVideoType?: 'link' | 'file';
+  visualMaterialType?: 'both' | 'photo' | 'video';
   priority?: 'low' | 'medium' | 'urgent';
   presskitStatus?: 'pending' | 'completed';
   createdAt: any;

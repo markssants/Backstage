@@ -58,6 +58,7 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
     flyerPhotoType: 'link',
     animationVideo: '',
     animationVideoType: 'link',
+    visualMaterialType: 'both',
     priority: 'medium',
     presskitStatus: 'pending'
   });
@@ -138,9 +139,10 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
         }
         toast.success("Logo da gravadora enviada com sucesso!");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Erro no upload do arquivo:", error);
-      toast.error("Houve um erro ao enviar o arquivo.");
+      const errMsg = error?.message || String(error);
+      toast.error(`Erro ao enviar o arquivo: ${errMsg}. Certifique-se de que o Firebase Storage está ativado nas configurações do console e que as regras de gravação permitem o upload.`);
     } finally {
       setUploadingState(prev => ({ ...prev, [fieldKey]: false }));
     }
@@ -178,6 +180,7 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
       flyerPhotoType: asset.flyerPhotoType || (asset.flyerPhoto && asset.flyerPhoto.includes('firebasestorage') ? 'file' : 'link'),
       animationVideoType: asset.animationVideoType || (asset.animationVideo && asset.animationVideo.includes('firebasestorage') ? 'file' : 'link'),
       musicUrlType: asset.musicUrlType || (asset.musicUrl && asset.musicUrl.includes('firebasestorage') ? 'file' : 'link'),
+      visualMaterialType: asset.visualMaterialType || 'both',
       agencies: ags,
       labels: labs
     });
@@ -213,13 +216,18 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
 
     // 3. Material Visual Validation (if active)
     if (hasVisualMaterial) {
-      if (!newAsset.flyerPhoto?.trim()) {
-        toast.error("Faltando campo 'Foto para o Flyer' na seção Material Visual.");
-        return;
+      const vType = newAsset.visualMaterialType || 'both';
+      if (vType === 'both' || vType === 'photo') {
+        if (!newAsset.flyerPhoto?.trim()) {
+          toast.error("Faltando campo 'Foto para o Flyer' na seção Material Visual.");
+          return;
+        }
       }
-      if (!newAsset.animationVideo?.trim()) {
-        toast.error("Faltando campo 'Vídeo para Animação' na seção Material Visual.");
-        return;
+      if (vType === 'both' || vType === 'video') {
+        if (!newAsset.animationVideo?.trim()) {
+          toast.error("Faltando campo 'Vídeo para Animação' na seção Material Visual.");
+          return;
+        }
       }
     }
 
@@ -267,10 +275,12 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
     setLoading(true);
     try {
       // Clean up fields based on toggle states
+      const vType = newAsset.visualMaterialType || 'both';
       const payload = {
         ...newAsset,
-        flyerPhoto: hasVisualMaterial ? (newAsset.flyerPhoto || '') : '',
-        animationVideo: hasVisualMaterial ? (newAsset.animationVideo || '') : '',
+        visualMaterialType: hasVisualMaterial ? vType : 'both',
+        flyerPhoto: hasVisualMaterial && (vType === 'both' || vType === 'photo') ? (newAsset.flyerPhoto || '') : '',
+        animationVideo: hasVisualMaterial && (vType === 'both' || vType === 'video') ? (newAsset.animationVideo || '') : '',
         hasMandatoryLogo: !!newAsset.hasMandatoryLogo,
         agencies: newAsset.hasMandatoryLogo ? (newAsset.agencies || []) : [],
         labels: (newAsset.hasMandatoryLogo && hasRecordLabel) ? (newAsset.labels || []) : [],
@@ -368,6 +378,7 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
       flyerPhotoType: 'link',
       animationVideo: '',
       animationVideoType: 'link',
+      visualMaterialType: 'both',
       priority: 'medium',
       presskitStatus: 'pending'
     });
@@ -1116,179 +1127,228 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                       className="space-y-4 overflow-hidden pt-2"
                     >
                       <div className="space-y-4">
-                        {/* Foto do Flyer */}
-                        <div className="space-y-3 border-b border-white/5 pb-4">
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                            <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400 flex items-center gap-1">
-                              Foto para o Flyer <span className="text-pink-500 font-bold">*</span>
-                            </Label>
-                            <div className="flex bg-white/5 p-0.5 rounded-xl border border-white/10 w-fit">
-                              <button
-                                type="button"
-                                onClick={() => setNewAsset({...newAsset, flyerPhotoType: 'link'})}
-                                className={cn(
-                                  "rounded-lg text-[8px] font-black uppercase tracking-widest h-7 px-2.5 transition-all cursor-pointer",
-                                  (newAsset.flyerPhotoType || 'link') === 'link'
-                                    ? "bg-purple-500/20 text-purple-400 border border-purple-500/30 shadow-inner"
-                                    : "text-slate-500 hover:text-slate-300"
-                                )}
-                              >
-                                Link / Texto
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setNewAsset({...newAsset, flyerPhotoType: 'file'})}
-                                className={cn(
-                                  "rounded-lg text-[8px] font-black uppercase tracking-widest h-7 px-2.5 transition-all cursor-pointer",
-                                  newAsset.flyerPhotoType === 'file'
-                                    ? "bg-purple-500/20 text-purple-400 border border-purple-500/30 shadow-inner"
-                                    : "text-slate-500 hover:text-slate-300"
-                                )}
-                              >
-                                Enviar Foto (.png, .jpg)
-                              </button>
-                            </div>
+                        {/* Seletor de Tipo de Material Visual */}
+                        <div className="space-y-2.5 pb-4 border-b border-white/5">
+                          <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400">
+                            Tipo de Material Solicitado
+                          </Label>
+                          <div className="flex bg-white/5 p-1 rounded-xl border border-white/10 w-fit gap-1">
+                            <button
+                              type="button"
+                              onClick={() => setNewAsset({...newAsset, visualMaterialType: 'photo'})}
+                              className={cn(
+                                "rounded-lg text-[9px] font-black uppercase tracking-widest h-8 px-3 transition-all cursor-pointer flex items-center justify-center gap-1.5",
+                                (newAsset.visualMaterialType || 'both') === 'photo'
+                                  ? "bg-purple-500/20 text-purple-400 border border-purple-500/30 shadow-inner"
+                                  : "text-slate-500 hover:text-slate-300"
+                              )}
+                            >
+                              Só Foto
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setNewAsset({...newAsset, visualMaterialType: 'video'})}
+                              className={cn(
+                                "rounded-lg text-[9px] font-black uppercase tracking-widest h-8 px-3 transition-all cursor-pointer flex items-center justify-center gap-1.5",
+                                (newAsset.visualMaterialType || 'both') === 'video'
+                                  ? "bg-purple-500/20 text-purple-400 border border-purple-500/30 shadow-inner"
+                                  : "text-slate-500 hover:text-slate-300"
+                              )}
+                            >
+                              Só Vídeo
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setNewAsset({...newAsset, visualMaterialType: 'both'})}
+                              className={cn(
+                                "rounded-lg text-[9px] font-black uppercase tracking-widest h-8 px-3 transition-all cursor-pointer flex items-center justify-center gap-1.5",
+                                (newAsset.visualMaterialType || 'both') === 'both'
+                                  ? "bg-purple-500/20 text-purple-400 border border-purple-500/30 shadow-inner"
+                                  : "text-slate-500 hover:text-slate-300"
+                              )}
+                            >
+                              Os 2
+                            </button>
                           </div>
+                        </div>
 
-                          {(newAsset.flyerPhotoType || 'link') === 'link' ? (
-                            <Input 
-                              value={newAsset.flyerPhoto || ''} 
-                              onChange={e => setNewAsset({...newAsset, flyerPhoto: e.target.value})} 
-                              placeholder="Ex: dj_promo.png ou link da foto" 
-                              className="rounded-2xl bg-white/5 border-white/10 text-white h-12" 
-                            />
-                          ) : (
-                            <div className="relative border border-dashed border-white/10 bg-white/[0.01] hover:bg-white/[0.03] transition-all rounded-2xl p-4 flex flex-col items-center justify-center min-h-[5rem]">
-                              {uploadingState['flyerPhoto'] ? (
-                                <div className="flex flex-col items-center gap-2">
-                                  <Loader2 className="w-6 h-6 text-purple-400 animate-spin" />
-                                  <span className="text-[10px] uppercase font-black tracking-widest text-slate-400">Enviando foto...</span>
-                                </div>
-                              ) : newAsset.flyerPhoto && newAsset.flyerPhoto.includes('firebasestorage') ? (
-                                <div className="flex items-center justify-between w-full bg-emerald-500/10 border border-emerald-500/20 p-2.5 rounded-xl">
-                                  <div className="flex items-center space-x-2 truncate">
-                                    <Paperclip className="w-4 h-4 text-emerald-400 shrink-0" />
-                                    <span className="text-xs text-emerald-400 font-bold truncate">Foto de Flyer Pronta</span>
+                        {/* Foto do Flyer */}
+                        {((newAsset.visualMaterialType || 'both') === 'photo' || (newAsset.visualMaterialType || 'both') === 'both') && (
+                          <div className="space-y-3 border-b border-white/5 pb-4">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                              <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400 flex items-center gap-1">
+                                Foto para o Flyer <span className="text-pink-500 font-bold">*</span>
+                              </Label>
+                              <div className="flex bg-white/5 p-0.5 rounded-xl border border-white/10 w-fit">
+                                <button
+                                  type="button"
+                                  onClick={() => setNewAsset({...newAsset, flyerPhotoType: 'link'})}
+                                  className={cn(
+                                    "rounded-lg text-[8px] font-black uppercase tracking-widest h-7 px-2.5 transition-all cursor-pointer",
+                                    (newAsset.flyerPhotoType || 'link') === 'link'
+                                      ? "bg-purple-500/20 text-purple-400 border border-purple-500/30 shadow-inner"
+                                      : "text-slate-500 hover:text-slate-300"
+                                  )}
+                                >
+                                  Link / Texto
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setNewAsset({...newAsset, flyerPhotoType: 'file'})}
+                                  className={cn(
+                                    "rounded-lg text-[8px] font-black uppercase tracking-widest h-7 px-2.5 transition-all cursor-pointer",
+                                    newAsset.flyerPhotoType === 'file'
+                                      ? "bg-purple-500/20 text-purple-400 border border-purple-500/30 shadow-inner"
+                                      : "text-slate-500 hover:text-slate-300"
+                                  )}
+                                >
+                                  Enviar Foto (.png, .jpg)
+                                </button>
+                              </div>
+                            </div>
+
+                            {(newAsset.flyerPhotoType || 'link') === 'link' ? (
+                              <Input 
+                                value={newAsset.flyerPhoto || ''} 
+                                onChange={e => setNewAsset({...newAsset, flyerPhoto: e.target.value})} 
+                                placeholder="Ex: dj_promo.png ou link da foto" 
+                                className="rounded-2xl bg-white/5 border-white/10 text-white h-12" 
+                              />
+                            ) : (
+                              <div className="relative border border-dashed border-white/10 bg-white/[0.01] hover:bg-white/[0.03] transition-all rounded-2xl p-4 flex flex-col items-center justify-center min-h-[5rem]">
+                                {uploadingState['flyerPhoto'] ? (
+                                  <div className="flex flex-col items-center gap-2">
+                                    <Loader2 className="w-6 h-6 text-purple-400 animate-spin" />
+                                    <span className="text-[10px] uppercase font-black tracking-widest text-slate-400">Enviando foto...</span>
                                   </div>
-                                  <div className="flex items-center gap-2">
-                                    <Label htmlFor="flyer-file-ref" className="text-[9px] uppercase font-black tracking-widest px-2.5 h-8 bg-purple-500/10 border border-purple-500/20 rounded-lg flex items-center justify-center cursor-pointer text-purple-400 hover:bg-purple-500/20 transition-all">
-                                      Alterar
-                                    </Label>
+                                ) : newAsset.flyerPhoto && newAsset.flyerPhoto.includes('firebasestorage') ? (
+                                  <div className="flex items-center justify-between w-full bg-emerald-500/10 border border-emerald-500/20 p-2.5 rounded-xl">
+                                    <div className="flex items-center space-x-2 truncate">
+                                      <Paperclip className="w-4 h-4 text-emerald-400 shrink-0" />
+                                      <span className="text-xs text-emerald-400 font-bold truncate">Foto de Flyer Pronta</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <Label htmlFor="flyer-file-ref" className="text-[9px] uppercase font-black tracking-widest px-2.5 h-8 bg-purple-500/10 border border-purple-500/20 rounded-lg flex items-center justify-center cursor-pointer text-purple-400 hover:bg-purple-500/20 transition-all">
+                                        Alterar
+                                      </Label>
+                                      <input
+                                        id="flyer-file-ref"
+                                        type="file"
+                                        accept="image/*"
+                                        onChange={(e) => handleFileUpload(e, 'flyerPhoto', ['.png', '.jpg', '.jpeg', 'image/'])}
+                                        className="hidden"
+                                      />
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <label htmlFor="flyer-file-input" className="flex flex-col items-center gap-2 cursor-pointer w-full h-full py-4 text-center">
+                                      <Upload className="w-6 h-6 text-slate-400 hover:text-purple-400 transition-colors" />
+                                      <span className="text-xs text-slate-300 font-extrabold max-w-[200px] leading-tight">Selecionar Imagem (.png, .jpg)</span>
+                                      <span className="text-[9px] text-slate-500 font-medium uppercase tracking-wider">Clique para selecionar imagem</span>
+                                    </label>
                                     <input
-                                      id="flyer-file-ref"
+                                      id="flyer-file-input"
                                       type="file"
                                       accept="image/*"
                                       onChange={(e) => handleFileUpload(e, 'flyerPhoto', ['.png', '.jpg', '.jpeg', 'image/'])}
                                       className="hidden"
                                     />
-                                  </div>
-                                </div>
-                              ) : (
-                                <>
-                                  <label htmlFor="flyer-file-input" className="flex flex-col items-center gap-2 cursor-pointer w-full h-full py-4 text-center">
-                                    <Upload className="w-6 h-6 text-slate-400 hover:text-purple-400 transition-colors" />
-                                    <span className="text-xs text-slate-300 font-extrabold max-w-[200px] leading-tight">Selecionar Imagem (.png, .jpg)</span>
-                                    <span className="text-[9px] text-slate-500 font-medium uppercase tracking-wider">Clique para selecionar imagem</span>
-                                  </label>
-                                  <input
-                                    id="flyer-file-input"
-                                    type="file"
-                                    accept="image/*"
-                                    onChange={(e) => handleFileUpload(e, 'flyerPhoto', ['.png', '.jpg', '.jpeg', 'image/'])}
-                                    className="hidden"
-                                  />
-                                </>
-                              )}
-                            </div>
-                          )}
-                        </div>
+                                  </>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
 
                         {/* Vídeo do Motion */}
-                        <div className="space-y-3 pb-2">
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                            <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400 flex items-center gap-1">
-                              Vídeo para Animação/Motion <span className="text-pink-500 font-bold">*</span>
-                            </Label>
-                            <div className="flex bg-white/5 p-0.5 rounded-xl border border-white/10 w-fit">
-                              <button
-                                type="button"
-                                onClick={() => setNewAsset({...newAsset, animationVideoType: 'link'})}
-                                className={cn(
-                                  "rounded-lg text-[8px] font-black uppercase tracking-widest h-7 px-2.5 transition-all cursor-pointer",
-                                  (newAsset.animationVideoType || 'link') === 'link'
-                                    ? "bg-purple-500/20 text-purple-400 border border-purple-500/30 shadow-inner"
-                                    : "text-slate-500 hover:text-slate-300"
-                                )}
-                              >
-                                Link / Texto
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setNewAsset({...newAsset, animationVideoType: 'file'})}
-                                className={cn(
-                                  "rounded-lg text-[8px] font-black uppercase tracking-widest h-7 px-2.5 transition-all cursor-pointer",
-                                  newAsset.animationVideoType === 'file'
-                                    ? "bg-purple-500/20 text-purple-400 border border-purple-500/30 shadow-inner"
-                                    : "text-slate-500 hover:text-slate-300"
-                                )}
-                              >
-                                Enviar Vídeo (.mp4)
-                              </button>
+                        {((newAsset.visualMaterialType || 'both') === 'video' || (newAsset.visualMaterialType || 'both') === 'both') && (
+                          <div className="space-y-3 pb-2">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                              <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400 flex items-center gap-1">
+                                Vídeo para Animação/Motion <span className="text-pink-500 font-bold">*</span>
+                              </Label>
+                              <div className="flex bg-white/5 p-0.5 rounded-xl border border-white/10 w-fit">
+                                <button
+                                  type="button"
+                                  onClick={() => setNewAsset({...newAsset, animationVideoType: 'link'})}
+                                  className={cn(
+                                    "rounded-lg text-[8px] font-black uppercase tracking-widest h-7 px-2.5 transition-all cursor-pointer",
+                                    (newAsset.animationVideoType || 'link') === 'link'
+                                      ? "bg-purple-500/20 text-purple-400 border border-purple-500/30 shadow-inner"
+                                      : "text-slate-500 hover:text-slate-300"
+                                  )}
+                                >
+                                  Link / Texto
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setNewAsset({...newAsset, animationVideoType: 'file'})}
+                                  className={cn(
+                                    "rounded-lg text-[8px] font-black uppercase tracking-widest h-7 px-2.5 transition-all cursor-pointer",
+                                    newAsset.animationVideoType === 'file'
+                                      ? "bg-purple-500/20 text-purple-400 border border-purple-500/30 shadow-inner"
+                                      : "text-slate-500 hover:text-slate-300"
+                                  )}
+                                >
+                                  Enviar Vídeo (.mp4)
+                                </button>
+                              </div>
                             </div>
-                          </div>
 
-                          {(newAsset.animationVideoType || 'link') === 'link' ? (
-                            <Input 
-                              value={newAsset.animationVideo || ''} 
-                              onChange={e => setNewAsset({...newAsset, animationVideo: e.target.value})} 
-                              placeholder="Ex: painel_loop.mp4 ou link do drive" 
-                              className="rounded-2xl bg-white/5 border-white/10 text-white h-12" 
-                            />
-                          ) : (
-                            <div className="relative border border-dashed border-white/10 bg-white/[0.01] hover:bg-white/[0.03] transition-all rounded-2xl p-4 flex flex-col items-center justify-center min-h-[5rem]">
-                              {uploadingState['animationVideo'] ? (
-                                <div className="flex flex-col items-center gap-2">
-                                  <Loader2 className="w-6 h-6 text-purple-400 animate-spin" />
-                                  <span className="text-[10px] uppercase font-black tracking-widest text-slate-400">Enviando vídeo (.mp4)...</span>
-                                </div>
-                              ) : newAsset.animationVideo && newAsset.animationVideo.includes('firebasestorage') ? (
-                                <div className="flex items-center justify-between w-full bg-emerald-500/10 border border-emerald-500/20 p-2.5 rounded-xl">
-                                  <div className="flex items-center space-x-2 truncate">
-                                    <Paperclip className="w-4 h-4 text-emerald-400 shrink-0" />
-                                    <span className="text-xs text-emerald-400 font-bold truncate">Vídeo para Motion Pronto</span>
+                            {(newAsset.animationVideoType || 'link') === 'link' ? (
+                              <Input 
+                                value={newAsset.animationVideo || ''} 
+                                onChange={e => setNewAsset({...newAsset, animationVideo: e.target.value})} 
+                                placeholder="Ex: painel_loop.mp4 ou link do drive" 
+                                className="rounded-2xl bg-white/5 border-white/10 text-white h-12" 
+                              />
+                            ) : (
+                              <div className="relative border border-dashed border-white/10 bg-white/[0.01] hover:bg-white/[0.03] transition-all rounded-2xl p-4 flex flex-col items-center justify-center min-h-[5rem]">
+                                {uploadingState['animationVideo'] ? (
+                                  <div className="flex flex-col items-center gap-2">
+                                    <Loader2 className="w-6 h-6 text-purple-400 animate-spin" />
+                                    <span className="text-[10px] uppercase font-black tracking-widest text-slate-400">Enviando vídeo (.mp4)...</span>
                                   </div>
-                                  <div className="flex items-center gap-2">
-                                    <Label htmlFor="video-file-ref" className="text-[9px] uppercase font-black tracking-widest px-2.5 h-8 bg-purple-500/10 border border-purple-500/20 rounded-lg flex items-center justify-center cursor-pointer text-purple-400 hover:bg-purple-500/20 transition-all">
-                                      Alterar
-                                    </Label>
+                                ) : newAsset.animationVideo && newAsset.animationVideo.includes('firebasestorage') ? (
+                                  <div className="flex items-center justify-between w-full bg-emerald-500/10 border border-emerald-500/20 p-2.5 rounded-xl">
+                                    <div className="flex items-center space-x-2 truncate">
+                                      <Paperclip className="w-4 h-4 text-emerald-400 shrink-0" />
+                                      <span className="text-xs text-emerald-400 font-bold truncate">Vídeo para Motion Pronto</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <Label htmlFor="video-file-ref" className="text-[9px] uppercase font-black tracking-widest px-2.5 h-8 bg-purple-500/10 border border-purple-500/20 rounded-lg flex items-center justify-center cursor-pointer text-purple-400 hover:bg-purple-500/20 transition-all">
+                                        Alterar
+                                      </Label>
+                                      <input
+                                        id="video-file-ref"
+                                        type="file"
+                                        accept="video/*"
+                                        onChange={(e) => handleFileUpload(e, 'animationVideo', ['.mp4', '.mov', '.avi', 'video/'])}
+                                        className="hidden"
+                                      />
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <label htmlFor="video-file-input" className="flex flex-col items-center gap-2 cursor-pointer w-full h-full py-4 text-center">
+                                      <Upload className="w-6 h-6 text-slate-400 hover:text-purple-400 transition-colors" />
+                                      <span className="text-xs text-slate-300 font-extrabold max-w-[200px] leading-tight">Selecionar Vídeo (.mp4, .mov)</span>
+                                      <span className="text-[9px] text-slate-500 font-medium uppercase tracking-wider">Clique para selecionar arquivo de vídeo/motion</span>
+                                    </label>
                                     <input
-                                      id="video-file-ref"
+                                      id="video-file-input"
                                       type="file"
                                       accept="video/*"
                                       onChange={(e) => handleFileUpload(e, 'animationVideo', ['.mp4', '.mov', '.avi', 'video/'])}
                                       className="hidden"
                                     />
-                                  </div>
-                                </div>
-                              ) : (
-                                <>
-                                  <label htmlFor="video-file-input" className="flex flex-col items-center gap-2 cursor-pointer w-full h-full py-4 text-center">
-                                    <Upload className="w-6 h-6 text-slate-400 hover:text-purple-400 transition-colors" />
-                                    <span className="text-xs text-slate-300 font-extrabold max-w-[200px] leading-tight">Selecionar Vídeo (.mp4, .mov)</span>
-                                    <span className="text-[9px] text-slate-500 font-medium uppercase tracking-wider">Clique para selecionar arquivo de vídeo/motion</span>
-                                  </label>
-                                  <input
-                                    id="video-file-input"
-                                    type="file"
-                                    accept="video/*"
-                                    onChange={(e) => handleFileUpload(e, 'animationVideo', ['.mp4', '.mov', '.avi', 'video/'])}
-                                    className="hidden"
-                                  />
-                                </>
-                              )}
-                            </div>
-                          )}
-                        </div>
+                                  </>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </motion.div>
                   ) : (

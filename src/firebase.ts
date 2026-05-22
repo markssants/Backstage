@@ -34,6 +34,9 @@ let storageInstance: any = null;
 if (hasRequiredConfig) {
   try {
     storageInstance = getStorage(app);
+    // Limit retries to 4 seconds to fail fast and trigger clean error message instead of infinite spinner
+    storageInstance.maxUploadRetryTime = 4000;
+    storageInstance.maxOperationRetryTime = 4000;
   } catch (error) {
     console.error("Firebase Storage failed to initialize, probably because it is not enabled in the Firebase Console. Standard HTTP link fallback will be used:", error);
   }
