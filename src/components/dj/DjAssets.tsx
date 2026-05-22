@@ -25,10 +25,17 @@ interface DjAssetsProps {
 function getFriendlyFileName(url: string | undefined): string {
   if (!url) return '';
   try {
+    const urlObj = new URL(url);
+    const nameParam = urlObj.searchParams.get('name');
+    if (nameParam) return decodeURIComponent(nameParam);
+  } catch (e) {}
+  try {
     const decoded = decodeURIComponent(url);
     const parts = decoded.split('/');
     let lastPart = parts[parts.length - 1];
-    lastPart = lastPart.split('?')[0];
+    if (lastPart.includes('?')) {
+      lastPart = lastPart.split('?')[0];
+    }
     const subParts = lastPart.split('/');
     let segment = subParts[subParts.length - 1];
     segment = segment.replace(/^\d+_/g, '');
@@ -36,6 +43,14 @@ function getFriendlyFileName(url: string | undefined): string {
   } catch (e) {
     return 'Arquivo';
   }
+}
+
+function isUploadedFile(url: string | undefined): boolean {
+  if (!url) return false;
+  return url.includes('firebasestorage') || 
+         url.includes('/uploads/') || 
+         url.includes('drive.google.com') || 
+         url.includes('googleapis.com');
 }
 
 export function DjAssets({ event, profile }: DjAssetsProps) {
@@ -138,7 +153,12 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
         setNewAsset(prev => ({ ...prev, animationVideo: downloadUrl, animationVideoType: 'file' }));
         toast.success("Vídeo de animação enviado para o seu Google Drive com sucesso!");
       } else if (fieldKey === 'musicUrl') {
-        setNewAsset(prev => ({ ...prev, musicUrl: downloadUrl, musicUrlType: 'file' }));
+        setNewAsset(prev => ({ 
+          ...prev, 
+          musicUrl: downloadUrl, 
+          musicUrlType: 'file',
+          musicName: prev.musicName || file.name.replace(/\.[^/.]+$/, "")
+        }));
         setDurationMode('visual');
         toast.success("Música de entrada enviada para o seu Google Drive com sucesso!");
       } else if (fieldKey.startsWith('agency_')) {
@@ -201,7 +221,12 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
             setNewAsset(prev => ({ ...prev, animationVideo: downloadUrl, animationVideoType: 'file' }));
             toast.success("Vídeo de animação enviado com sucesso (Firebase Storage)!");
           } else if (fieldKey === 'musicUrl') {
-            setNewAsset(prev => ({ ...prev, musicUrl: downloadUrl, musicUrlType: 'file' }));
+            setNewAsset(prev => ({ 
+              ...prev, 
+              musicUrl: downloadUrl, 
+              musicUrlType: 'file',
+              musicName: prev.musicName || file.name.replace(/\.[^/.]+$/, "")
+            }));
             setDurationMode('visual');
             toast.success("Música de entrada enviada com sucesso (Firebase Storage)!");
           } else if (fieldKey.startsWith('agency_')) {
@@ -267,7 +292,12 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
           setNewAsset(prev => ({ ...prev, animationVideo: downloadUrl, animationVideoType: 'file' }));
           toast.success("Vídeo de animação enviado com sucesso (Servidor Local)!");
         } else if (fieldKey === 'musicUrl') {
-          setNewAsset(prev => ({ ...prev, musicUrl: downloadUrl, musicUrlType: 'file' }));
+          setNewAsset(prev => ({ 
+            ...prev, 
+            musicUrl: downloadUrl, 
+            musicUrlType: 'file',
+            musicName: prev.musicName || file.name.replace(/\.[^/.]+$/, "")
+          }));
           toast.success("Música de entrada enviada com sucesso (Servidor Local)!");
         } else if (fieldKey.startsWith('agency_')) {
           const idx = parseInt(fieldKey.split('_')[1], 10);
@@ -324,23 +354,23 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
     const ags = asset.agencies && asset.agencies.length > 0
       ? asset.agencies.map(a => ({ 
           ...a, 
-          type: a.type || (a.link && (a.link.includes('firebasestorage') || a.link.includes('/uploads/')) ? 'file' : 'link') 
+          type: a.type || (isUploadedFile(a.link) ? 'file' : 'link') 
         }))
       : [{ name: asset.agencyInfo || '', link: '', type: 'link' as const }];
     
     const labs = asset.labels && asset.labels.length > 0
       ? asset.labels.map(l => ({ 
           ...l, 
-          type: l.type || (l.link && (l.link.includes('firebasestorage') || l.link.includes('/uploads/')) ? 'file' : 'link') 
+          type: l.type || (isUploadedFile(l.link) ? 'file' : 'link') 
         }))
       : [{ name: asset.labelInfo || '', link: '', type: 'link' as const }];
 
     setNewAsset({ 
       ...asset,
-      presskitType: asset.presskitType || (asset.presskitUrl && (asset.presskitUrl.includes('firebasestorage') || asset.presskitUrl.includes('/uploads/')) ? 'file' : 'link'),
-      flyerPhotoType: asset.flyerPhotoType || (asset.flyerPhoto && (asset.flyerPhoto.includes('firebasestorage') || asset.flyerPhoto.includes('/uploads/')) ? 'file' : 'link'),
-      animationVideoType: asset.animationVideoType || (asset.animationVideo && (asset.animationVideo.includes('firebasestorage') || asset.animationVideo.includes('/uploads/')) ? 'file' : 'link'),
-      musicUrlType: asset.musicUrlType || (asset.musicUrl && (asset.musicUrl.includes('firebasestorage') || asset.musicUrl.includes('/uploads/')) ? 'file' : 'link'),
+      presskitType: asset.presskitType || (isUploadedFile(asset.presskitUrl) ? 'file' : 'link'),
+      flyerPhotoType: asset.flyerPhotoType || (isUploadedFile(asset.flyerPhoto) ? 'file' : 'link'),
+      animationVideoType: asset.animationVideoType || (isUploadedFile(asset.animationVideo) ? 'file' : 'link'),
+      musicUrlType: asset.musicUrlType || (isUploadedFile(asset.musicUrl) ? 'file' : 'link'),
       visualMaterialType: asset.visualMaterialType || 'both',
       agencies: ags,
       labels: labs
@@ -747,7 +777,7 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                             />
                           </div>
                         </div>
-                      ) : newAsset.presskitUrl && (newAsset.presskitUrl.includes('firebasestorage') || newAsset.presskitUrl.includes('/uploads/')) ? (
+                      ) : isUploadedFile(newAsset.presskitUrl) ? (
                         <div className="flex flex-col sm:flex-row items-center justify-between w-full bg-purple-950/20 border border-purple-500/20 p-4 rounded-2xl gap-4">
                           <div className="flex items-center gap-3 w-full sm:w-auto min-w-0">
                             <div className="w-12 h-12 rounded-xl bg-purple-500/10 flex items-center justify-center border border-purple-500/20 text-purple-400 shrink-0">
@@ -1045,7 +1075,7 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                                           />
                                         </div>
                                       </div>
-                                    ) : agency.link && (agency.link.includes('firebasestorage') || agency.link.includes('/uploads/')) ? (
+                                    ) : isUploadedFile(agency.link) ? (
                                       <div className="flex flex-col sm:flex-row items-center justify-between w-full bg-purple-950/20 border border-purple-500/20 p-2.5 rounded-xl gap-3">
                                         <div className="flex items-center gap-2.5 w-full sm:w-auto min-w-0">
                                           <img 
@@ -1251,7 +1281,7 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                                                 />
                                               </div>
                                             </div>
-                                          ) : label.link && (label.link.includes('firebasestorage') || label.link.includes('/uploads/')) ? (
+                                          ) : isUploadedFile(label.link) ? (
                                             <div className="flex flex-col sm:flex-row items-center justify-between w-full bg-purple-950/20 border border-purple-500/20 p-2.5 rounded-xl gap-3">
                                               <div className="flex items-center gap-2.5 w-full sm:w-auto min-w-0">
                                                 <img 
@@ -1462,7 +1492,7 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                                       />
                                     </div>
                                   </div>
-                                ) : newAsset.flyerPhoto && (newAsset.flyerPhoto.includes('firebasestorage') || newAsset.flyerPhoto.includes('/uploads/')) ? (
+                                ) : isUploadedFile(newAsset.flyerPhoto) ? (
                                   <div className="flex flex-col sm:flex-row items-center justify-between w-full bg-purple-950/20 border border-purple-500/20 p-4 rounded-2xl gap-4">
                                     <div className="flex items-center gap-3 w-full sm:w-auto min-w-0">
                                       <img 
@@ -1574,7 +1604,7 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                                       />
                                     </div>
                                   </div>
-                                ) : newAsset.animationVideo && (newAsset.animationVideo.includes('firebasestorage') || newAsset.animationVideo.includes('/uploads/')) ? (
+                                ) : isUploadedFile(newAsset.animationVideo) ? (
                                   <div className="flex flex-col sm:flex-row items-center justify-between w-full bg-purple-950/20 border border-purple-500/20 p-4 rounded-2xl gap-4">
                                     <div className="flex items-center gap-3 w-full sm:w-auto min-w-0">
                                       <div className="w-12 h-12 rounded-xl bg-purple-500/10 flex items-center justify-center border border-purple-500/20 text-purple-400 shrink-0">
@@ -1746,7 +1776,7 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                                     />
                                   </div>
                                 </div>
-                              ) : newAsset.musicUrl && (newAsset.musicUrl.includes('firebasestorage') || newAsset.musicUrl.includes('/uploads/')) ? (
+                              ) : isUploadedFile(newAsset.musicUrl) ? (
                                 <div className="flex flex-col sm:flex-row items-center justify-between w-full bg-purple-950/20 border border-purple-500/20 p-4 rounded-2xl gap-4">
                                   <div className="flex items-center gap-3 w-full sm:w-auto min-w-0">
                                     <div className="w-12 h-12 rounded-xl bg-purple-500/10 flex items-center justify-center border border-purple-500/20 text-purple-400 shrink-0">
@@ -1802,7 +1832,7 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                                   <button
                                     type="button"
                                     onClick={() => {
-                                      if (newAsset.musicUrl && (newAsset.musicUrl.includes('firebasestorage') || newAsset.musicUrl.includes('/uploads/'))) {
+                                      if (isUploadedFile(newAsset.musicUrl)) {
                                         setDurationMode('visual');
                                       } else {
                                         toast.warning("Envie o arquivo de áudio (.mp3/wav) primeiro para habilitar a escolha visual!");
@@ -1832,7 +1862,7 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                                 </div>
                               </div>
 
-                              {durationMode === 'visual' && newAsset.musicUrl && (newAsset.musicUrl.includes('firebasestorage') || newAsset.musicUrl.includes('/uploads/')) ? (
+                              {durationMode === 'visual' && isUploadedFile(newAsset.musicUrl) ? (
                                 <div className="space-y-2">
                                   <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400">
                                     Corte / Drop Escolhido
@@ -1868,7 +1898,7 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                               )}
                             </div>
 
-                            {isWaveformOpen && durationMode === 'visual' && newAsset.musicUrl && (newAsset.musicUrl.includes('firebasestorage') || newAsset.musicUrl.includes('/uploads/')) && (
+                            {isWaveformOpen && durationMode === 'visual' && isUploadedFile(newAsset.musicUrl) && (
                               <div className="mt-4 text-left w-full">
                                 <WaveformSelector
                                   audioUrl={newAsset.musicUrl}

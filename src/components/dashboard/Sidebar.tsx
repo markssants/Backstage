@@ -171,7 +171,7 @@ export function Sidebar({ activeView, setActiveView, profile, onLogout }: Sideba
                   className="flex items-center justify-between flex-1 min-w-0"
                 >
                   <span className="truncate flex items-center justify-between flex-grow">Sair</span>
-                  <span className="text-[9px] text-slate-400 font-black opacity-70 uppercase tracking-widest ml-2 shrink-0">v2.9.3</span>
+                  <span className="text-[9px] text-slate-400 font-black opacity-70 uppercase tracking-widest ml-2 shrink-0">v2.9.4</span>
                 </motion.div>
               )}
             </AnimatePresence>

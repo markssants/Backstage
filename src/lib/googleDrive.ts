@@ -34,12 +34,68 @@ async function makeFilePublic(fileId: string, accessToken: string): Promise<bool
   }
 }
 
+async function getOrCreateBackstageFolder(accessToken: string): Promise<string> {
+  const query = "name = 'Backstage' and mimeType = 'application/vnd.google-apps.folder' and trashed = false";
+  const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id)`;
+  
+  try {
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+      },
+    });
+    
+    if (res.ok) {
+      const data = await res.json();
+      if (data.files && data.files.length > 0) {
+        return data.files[0].id;
+      }
+    }
+  } catch (err) {
+    console.error("Erro ao procurar pasta Backstage em Google Drive:", err);
+  }
+
+  // Se não foi encontrada, cria a pasta
+  try {
+    const createRes = await fetch('https://www.googleapis.com/drive/v3/files', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        name: 'Backstage',
+        mimeType: 'application/vnd.google-apps.folder',
+      }),
+    });
+
+    if (createRes.ok) {
+      const folderMetadata = await createRes.json();
+      if (folderMetadata.id) {
+        // Define permissões da pasta para público ler (opcional, ajuda na herança)
+        await makeFilePublic(folderMetadata.id, accessToken);
+        return folderMetadata.id;
+      }
+    }
+    const errText = await createRes.text();
+    console.error("Falha ao criar pasta Backstage:", errText);
+  } catch (err) {
+    console.error("Erro ao criar pasta Backstage:", err);
+  }
+  
+  throw new Error("Não foi possível localizar ou criar a pasta 'Backstage' no seu Google Drive.");
+}
+
 export async function uploadFileToGoogleDrive(
   file: File,
   accessToken: string,
   onProgress: (progress: number) => void
 ): Promise<string> {
-  // Step 1: Create the file metadata in Google Drive
+  // Step 0: Obter ou criar a pasta Backstage no Google Drive
+  const parentFolderId = await getOrCreateBackstageFolder(accessToken);
+
+  // Step 1: Create the file metadata in Google Drive with the specified parent folder
   const metadataRes = await fetch('https://www.googleapis.com/drive/v3/files', {
     method: 'POST',
     headers: {
@@ -49,6 +105,7 @@ export async function uploadFileToGoogleDrive(
     body: JSON.stringify({
       name: file.name,
       mimeType: file.type || 'application/octet-stream',
+      parents: [parentFolderId],
     }),
   });
 
@@ -84,11 +141,11 @@ export async function uploadFileToGoogleDrive(
           // Step 3: Make the file readable by anyone
           await makeFilePublic(fileId, accessToken);
           // Standard webContentLink format that can act as direct source for browser media elements
-          const directUrl = `https://drive.google.com/uc?id=${fileId}&export=download`;
+          const directUrl = `https://drive.google.com/uc?id=${fileId}&export=download&name=${encodeURIComponent(file.name)}`;
           resolve(directUrl);
         } catch (err) {
           // Fallback to direct url anyway
-          const directUrl = `https://drive.google.com/uc?id=${fileId}&export=download`;
+          const directUrl = `https://drive.google.com/uc?id=${fileId}&export=download&name=${encodeURIComponent(file.name)}`;
           resolve(directUrl);
         }
       } else {

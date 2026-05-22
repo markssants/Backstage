@@ -41,10 +41,17 @@ interface DjPublicFormProps {
 function getFriendlyFileName(url: string | undefined): string {
   if (!url) return '';
   try {
+    const urlObj = new URL(url);
+    const nameParam = urlObj.searchParams.get('name');
+    if (nameParam) return decodeURIComponent(nameParam);
+  } catch (e) {}
+  try {
     const decoded = decodeURIComponent(url);
     const parts = decoded.split('/');
     let lastPart = parts[parts.length - 1];
-    lastPart = lastPart.split('?')[0];
+    if (lastPart.includes('?')) {
+      lastPart = lastPart.split('?')[0];
+    }
     const subParts = lastPart.split('/');
     let segment = subParts[subParts.length - 1];
     segment = segment.replace(/^\d+_/g, '');
@@ -52,6 +59,14 @@ function getFriendlyFileName(url: string | undefined): string {
   } catch (e) {
     return 'Arquivo';
   }
+}
+
+function isUploadedFile(url: string | undefined): boolean {
+  if (!url) return false;
+  return url.includes('firebasestorage') || 
+         url.includes('/uploads/') || 
+         url.includes('drive.google.com') || 
+         url.includes('googleapis.com');
 }
 
 export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
@@ -124,6 +139,7 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
       if (fieldKey === 'musicUrl') {
         setMusicUrl(downloadUrl);
         setMusicUrlType('file');
+        setMusicName(curr => curr || file.name.replace(/\.[^/.]+$/, ""));
         setDurationMode('visual'); // Switch to visual on successful upload
         toast.success("Música enviada para o Google Drive do evento com sucesso!");
       }
@@ -162,6 +178,7 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
         if (fieldKey === 'musicUrl') {
           setMusicUrl(downloadUrl);
           setMusicUrlType('file');
+          setMusicName(curr => curr || file.name.replace(/\.[^/.]+$/, ""));
           setDurationMode('visual'); // Switch to visual on successful upload!
           toast.success("Música enviada com sucesso (Firebase Storage)!");
         }
@@ -203,6 +220,7 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
         if (fieldKey === 'musicUrl') {
           setMusicUrl(downloadUrl);
           setMusicUrlType('file');
+          setMusicName(curr => curr || file.name.replace(/\.[^/.]+$/, ""));
           setDurationMode('visual');
           toast.success("Música enviada via servidor local!");
         }
@@ -253,7 +271,7 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
           setMusicUrl(data.musicUrl || '');
           setMusicDuration(data.musicDuration || '');
           
-          const isFile = !!(data.musicUrl && (data.musicUrl.includes('firebasestorage') || data.musicUrl.includes('/uploads/')));
+          const isFile = isUploadedFile(data.musicUrl);
           setMusicUrlType(data.musicUrlType || (isFile ? 'file' : 'link'));
           setDurationMode(isFile ? 'visual' : 'time');
 
@@ -867,7 +885,7 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
                                     />
                                   </div>
                                 </div>
-                              ) : musicUrl && (musicUrl.includes('firebasestorage') || musicUrl.includes('/uploads/')) ? (
+                              ) : isUploadedFile(musicUrl) ? (
                                 <div className="flex flex-col sm:flex-row items-center justify-between w-full bg-purple-950/20 border border-purple-500/20 p-4 rounded-2xl gap-4">
                                   <div className="flex items-center gap-3 w-full sm:w-auto min-w-0">
                                     <div className="w-12 h-12 rounded-xl bg-purple-500/10 flex items-center justify-center border border-purple-500/20 text-purple-400 shrink-0">
@@ -924,7 +942,7 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
                                   <button
                                     type="button"
                                     onClick={() => {
-                                      if (musicUrl && (musicUrl.includes('firebasestorage') || musicUrl.includes('/uploads/'))) {
+                                      if (isUploadedFile(musicUrl)) {
                                         setDurationMode('visual');
                                       } else {
                                         toast.warning("Envie o arquivo de áudio (.mp3/wav) primeiro para habilitar a escolha visual!");
@@ -954,7 +972,7 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
                                 </div>
                               </div>
 
-                              {durationMode === 'visual' && musicUrl && (musicUrl.includes('firebasestorage') || musicUrl.includes('/uploads/')) ? (
+                              {durationMode === 'visual' && isUploadedFile(musicUrl) ? (
                                 <div className="space-y-2">
                                   <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400">
                                     Corte / Drop Escolhido
@@ -990,7 +1008,7 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
                               )}
                             </div>
 
-                            {isWaveformOpen && durationMode === 'visual' && musicUrl && (musicUrl.includes('firebasestorage') || musicUrl.includes('/uploads/')) && (
+                            {isWaveformOpen && durationMode === 'visual' && isUploadedFile(musicUrl) && (
                               <div className="mt-4 text-left w-full">
                                 <WaveformSelector
                                   audioUrl={musicUrl}
