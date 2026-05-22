@@ -2236,7 +2236,7 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
                   <Input 
                     value={editArt.title} 
                     onChange={e => setEditArt({...editArt, title: e.target.value})}
-                    className="text-lg sm:text-2xl font-black text-white tracking-tight border-none bg-white/5 rounded-2xl h-12 sm:h-14 focus:ring-pink-500 uppercase italic px-4 sm:px-6"
+                    className="text-lg sm:text-2xl font-black text-white tracking-tight border-none bg-white/5 rounded-2xl h-12 sm:h-14 focus:ring-pink-500 italic px-4 sm:px-6"
                   />
                   <div className="flex flex-wrap gap-2">
                     <Select onValueChange={(v: any) => setEditArt({...editArt, status: v})} value={editArt.status}>
