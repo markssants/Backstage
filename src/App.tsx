@@ -110,9 +110,9 @@ export default function App() {
   if (djShare && publicEventId && publicAssetId) {
     return (
       <div className="dark min-h-screen bg-[#0a0518] text-slate-100 overflow-hidden relative font-sans">
+        <Toaster />
         <div className="relative z-10 min-h-screen flex flex-col">
           <ThemeProvider attribute="class" defaultTheme="dark">
-            <Toaster />
             <DjPublicForm eventId={publicEventId} assetId={publicAssetId} />
           </ThemeProvider>
         </div>
@@ -124,10 +124,9 @@ export default function App() {
     <div className="dark min-h-screen bg-[#0a0518] text-slate-100 overflow-hidden relative font-sans">
       <div className="glow-purple top-[-10%] left-[-10%] w-[40%] h-[40%]" />
       <div className="glow-pink bottom-[10%] right-[-5%] w-[35%] h-[35%]" />
-      
+      <Toaster />
       <div className="relative z-10 min-h-screen flex flex-col">
         <ThemeProvider attribute="class" defaultTheme="dark">
-          <Toaster />
           {!user ? (
             <Landing handleLogin={handleLogin} loginLoading={loginLoading} />
           ) : !profile ? (

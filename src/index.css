@@ -161,3 +161,10 @@
 .glow-pink {
   @apply absolute rounded-full blur-[120px] opacity-20 bg-pink-600 pointer-events-none;
 }
+
+/* Force toast notifications to be on top of all dialog overlays and popups */
+[data-sonner-toaster],
+.sonner,
+section[data-sonner-toaster] {
+  z-index: 999999999 !important;
+}
