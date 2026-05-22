@@ -264,77 +264,32 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
       : 0;
 
     try {
-      if (profile.role === 'contractor') {
-        // Create the art card first
-        const docRef = await addDoc(collection(db, 'events', event.id, 'arts'), {
-          ...newArt,
-          eventId: event.id,
-          title: newArt.title.trim(),
-          description: newArt.description.trim(),
-          priority: newArt.priority,
-          category: newArt.category,
-          deadline: newArt.deadline || null,
-          status: status,
-          position: maxPosition + 1000,
-          isPendingCreate: true, // Mark it as pending
-          createdAt: serverTimestamp(),
-        });
-
-        // Register the pending change with the target doc ID
-        const pendingChangeData = {
-          type: 'create',
-          proposedData: {
-            title: newArt.title.trim(),
-            description: newArt.description.trim(),
-            priority: newArt.priority,
-            category: newArt.category,
-            deadline: newArt.deadline || null,
-            status: status,
-            position: maxPosition + 1000
-          },
-          originalData: null,
-          targetId: docRef.id,
-          title: `Criação de nova Arte "${newArt.title}"`,
-          contractorName: profile.name || 'Cliente',
-          contractorEmail: profile.email,
-          status: 'pending',
-          createdAt: serverTimestamp()
-        };
-        await addDoc(collection(db, 'events', event.id, 'pending_changes'), pendingChangeData);
-        setIsAddOpen(false);
-        setNewArt({ 
-          title: '', 
-          description: '', 
-          priority: 'medium', 
-          category: 'dj', 
-          deadline: '', 
-          color: '#000000',
-          status: 'todo'
-        });
-        toast.info("Nova arte cadastrada e enviada para aprovação do designer!");
-      } else {
-        await addDoc(collection(db, 'events', event.id, 'arts'), {
-          ...newArt,
-          eventId: event.id,
-          status: status,
-          position: maxPosition + 1000, // Large gap for easier reordering if needed
-          createdAt: serverTimestamp(),
-        });
-        setIsAddOpen(false);
-        setNewArt({ 
-          title: '', 
-          description: '', 
-          priority: 'medium', 
-          category: 'dj', 
-          deadline: '', 
-          color: '#000000',
-          status: 'todo'
-        });
-        toast.success(`Arte adicionada em ${translateStatus(status)}!`);
-      }
+      await addDoc(collection(db, 'events', event.id, 'arts'), {
+        ...newArt,
+        eventId: event.id,
+        title: newArt.title.trim(),
+        description: newArt.description.trim(),
+        priority: newArt.priority,
+        category: newArt.category,
+        deadline: newArt.deadline || null,
+        status: status,
+        position: maxPosition + 1000, // Large gap for easier reordering if needed
+        createdAt: serverTimestamp(),
+      });
+      setIsAddOpen(false);
+      setNewArt({ 
+        title: '', 
+        description: '', 
+        priority: 'medium', 
+        category: 'dj', 
+        deadline: '', 
+        color: '#000000',
+        status: 'todo'
+      });
+      toast.success(`Arte adicionada em ${translateStatus(status)}!`);
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, path);
-      toast.error("Erro ao solicitar criação de arte");
+      toast.error("Erro ao cadastrar criação de arte");
     } finally {
       setLoading(false);
     }
