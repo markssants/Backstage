@@ -1315,7 +1315,7 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
                                             )}
 
                                         <div className="space-y-0.5 pl-1.5">
-                                          <h4 className="font-black text-white text-[12px] leading-tight group-hover:text-pink-300 transition-colors uppercase tracking-tight pr-6">{art.title}</h4>
+                                          <h4 className="font-black text-white text-[12px] leading-tight group-hover:text-pink-300 transition-colors tracking-tight pr-6">{art.title}</h4>
                                           {art.description && (
                                             <p className="text-[9px] text-slate-400 line-clamp-2 italic font-medium leading-[1.4] opacity-70 group-hover:opacity-100 transition-opacity">
                                               {art.description}
@@ -1407,7 +1407,7 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
                   <div className="hidden md:grid grid-cols-[2fr_1fr_1fr_1fr_1fr_80px] gap-4 items-center">
                     <div className="space-y-1">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <h4 className="text-sm font-black text-white group-hover:text-pink-400 transition-all uppercase italic">{art.title}</h4>
+                        <h4 className="text-sm font-black text-white group-hover:text-pink-400 transition-all italic">{art.title}</h4>
                         {renderPendingBadge(art)}
                       </div>
                       <p className="text-[11px] text-slate-500 line-clamp-1 italic">{art.description || 'Sem descrição'}</p>
@@ -1457,7 +1457,7 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
                     {/* Middle: Title & optional Description */}
                     <div className="space-y-1">
                       <div className="flex items-center gap-2 flex-wrap mb-0.5">
-                        <h4 className="text-xs font-black text-white group-hover:text-pink-400 transition-all uppercase italic">{art.title}</h4>
+                        <h4 className="text-xs font-black text-white group-hover:text-pink-400 transition-all italic">{art.title}</h4>
                         {renderPendingBadge(art)}
                       </div>
                       {art.description && (
@@ -1623,7 +1623,7 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
                               {task.category === 'dj' ? 'DJ' : task.category === 'party' ? 'Festa' : 'Branding'}
                             </span>
                           </div>
-                          <h5 className="text-sm font-black text-white uppercase tracking-tight truncate">{task.title}</h5>
+                          <h5 className="text-sm font-black text-white tracking-tight truncate">{task.title}</h5>
                           {task.description && (
                             <p className="text-xs text-slate-400 line-clamp-2 font-medium">{task.description}</p>
                           )}
@@ -1708,7 +1708,7 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
                                       {...provided.dragHandleProps}
                                       onClick={() => !snapshot.isDragging && setSelectedArt(task)}
                                       className={cn(
-                                        "w-full text-left p-2 rounded-lg text-[9px] font-black uppercase tracking-tight border border-white/5 transition-all flex items-center justify-between gap-1 min-w-0",
+                                        "w-full text-left p-2 rounded-lg text-[9px] font-black tracking-tight border border-white/5 transition-all flex items-center justify-between gap-1 min-w-0",
                                         task.priority === 'high' ? "bg-red-500/20 text-red-400 border-red-500/20" :
                                         task.priority === 'medium' ? "bg-amber-500/20 text-amber-400 border-amber-500/20" :
                                         "bg-emerald-500/20 text-emerald-400 border-emerald-500/20",
@@ -1888,7 +1888,7 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
                                     {translatePriority(art.priority)}
                                   </Badge>
                                 </div>
-                                <h5 className="text-xs font-black text-white uppercase italic group-hover/card:text-pink-400 transition-all line-clamp-2">
+                                <h5 className="text-xs font-black text-white italic group-hover/card:text-pink-400 transition-all line-clamp-2">
                                   {art.title}
                                 </h5>
                               </div>
@@ -2856,7 +2856,7 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
                       className="group p-4 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 transition-all cursor-pointer flex items-center justify-between"
                     >
                       <div className="flex flex-col gap-1">
-                        <h4 className="text-sm font-black text-white uppercase italic group-hover:text-pink-400 transition-all">{art.title}</h4>
+                        <h4 className="text-sm font-black text-white italic group-hover:text-pink-400 transition-all">{art.title}</h4>
                         <div className="flex items-center gap-3">
                            <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest bg-white/5 px-2 py-0.5 rounded-full">
                             {translateStatus(art.status)}
