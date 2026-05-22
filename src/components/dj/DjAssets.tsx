@@ -679,16 +679,15 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                   <span className="text-[10px] uppercase font-black tracking-widest text-slate-300">2- Prazo de Entrega</span>
                 </div>
 
-                <div className="space-y-2 w-full">
+                <div className="space-y-2">
                   <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400 flex items-center gap-1">
                     Data da Arte <span className="text-pink-500 font-bold">*</span>
                   </Label>
-                  <input 
+                  <Input 
                     type="date"
                     value={newAsset.artDeadline || ''} 
                     onChange={e => setNewAsset({...newAsset, artDeadline: e.target.value})} 
-                    className="w-full rounded-2xl bg-white/5 border border-white/10 text-white h-12 px-4 font-bold text-sm block focus:outline-none focus:border-white/20" 
-                    style={{ colorScheme: 'dark' }}
+                    className="rounded-2xl bg-white/5 border-white/10 text-white h-12 [color-scheme:dark] px-5 font-bold" 
                   />
                 </div>
 
@@ -697,8 +696,8 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                     <div className="bg-blue-500/20 p-2 rounded-xl shrink-0 mt-0.5 animate-pulse">
                       <Calendar className="w-4 h-4 text-blue-400" />
                     </div>
-                    <div className="space-y-1 min-w-0 flex-1">
-                      <p className="text-[10px] text-blue-300 font-extrabold uppercase tracking-widest truncate">
+                    <div className="space-y-1">
+                      <p className="text-[10px] text-blue-300 font-extrabold uppercase tracking-widest">
                         Tarefa criada Automaticamente pro Designer
                       </p>
                       <p className="text-[11px] text-blue-200/70 font-medium leading-relaxed italic">
