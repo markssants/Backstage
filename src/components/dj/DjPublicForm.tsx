@@ -122,10 +122,20 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
     }
 
     if (hasMandatoryLogo) {
-      const activeAgencies = agencies.filter(a => a.name.trim() !== '');
-      if (activeAgencies.length === 0) {
-        toast.error("Por favor, preencha o nome de pelo menos uma Agência de Booking.");
+      if (agencies.length === 0) {
+        toast.error("Por favor, adicione pelo menos uma Agência de Booking.");
         return;
+      }
+      for (let i = 0; i < agencies.length; i++) {
+        const agency = agencies[i];
+        if (!agency.name.trim()) {
+          toast.error(`O nome da Agência #${i + 1} é obrigatório.`);
+          return;
+        }
+        if (!agency.link.trim()) {
+          toast.error(`O link do logo da Agência "${agency.name}" é obrigatório.`);
+          return;
+        }
       }
     }
 
@@ -359,7 +369,7 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
                                 </div>
                                 <div className="space-y-1">
                                   <Label className="text-[9px] uppercase font-bold tracking-widest text-slate-400">
-                                    Link do Logo (Opcional)
+                                    Link do Logo <span className="text-pink-500 font-bold">*</span>
                                   </Label>
                                   <Input 
                                     value={agency.link} 

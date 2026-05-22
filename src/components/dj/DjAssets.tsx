@@ -231,6 +231,10 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
           toast.error(`O nome da Agência #${i + 1} é obrigatório.`);
           return;
         }
+        if (!agency.link?.trim()) {
+          toast.error(`O link ou arquivo do logo da Agência "${agency.name}" é obrigatório.`);
+          return;
+        }
       }
 
       if (hasRecordLabel) {
@@ -776,7 +780,7 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
 
                               <div className="space-y-2 col-span-1 sm:col-span-2 border-t border-white/5 pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                                 <Label className="text-[9px] uppercase font-bold tracking-widest text-slate-400">
-                                  Logo da Agência
+                                  Logo da Agência <span className="text-pink-500 font-bold">*</span>
                                 </Label>
                                 <div className="flex bg-white/5 p-0.5 rounded-xl border border-white/10 w-fit">
                                   <button
