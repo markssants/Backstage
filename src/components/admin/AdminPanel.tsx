@@ -39,6 +39,19 @@ export function AdminPanel({ profile }: AdminPanelProps) {
   const [userForm, setUserForm] = useState({ name: '', email: '', role: 'contractor' as 'designer' | 'contractor' });
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
 
+  // Custom Confirmation Dialog state
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [confirmConfig, setConfirmConfig] = useState<{
+    title: string;
+    description: string;
+    onConfirm: () => void | Promise<void>;
+  } | null>(null);
+
+  const customConfirm = (title: string, description: string, onConfirm: () => void | Promise<void>) => {
+    setConfirmConfig({ title, description, onConfirm });
+    setIsConfirmOpen(true);
+  };
+
   // Event Edit / Designate Modal state
   const [isEventEditOpen, setIsEventEditOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<EventProject | null>(null);
@@ -148,16 +161,19 @@ export function AdminPanel({ profile }: AdminPanelProps) {
       toast.error("O Administrador mestre não pode ser removido!");
       return;
     }
-    const confirm = window.confirm(`Tem certeza que deseja excluir o usuário "${userToDelete.name}" (${userToDelete.email})?`);
-    if (!confirm) return;
-
-    try {
-      await deleteDoc(doc(db, 'users', userToDelete.id));
-      toast.success("Usuário removido da base de dados.");
-    } catch (err) {
-      toast.error("Erro ao excluir usuário.");
-      console.error(err);
-    }
+    customConfirm(
+      "Excluir Usuário",
+      `Tem certeza que deseja excluir o usuário "${userToDelete.name}" (${userToDelete.email})? Esta ação é irreversível.`,
+      async () => {
+        try {
+          await deleteDoc(doc(db, 'users', userToDelete.id));
+          toast.success("Usuário removido da base de dados.");
+        } catch (err) {
+          toast.error("Erro ao excluir usuário.");
+          console.error(err);
+        }
+      }
+    );
   };
 
   // Event Assign Handlers
@@ -207,16 +223,19 @@ export function AdminPanel({ profile }: AdminPanelProps) {
   };
 
   const handleDeleteEvent = async (ev: EventProject) => {
-    const confirm = window.confirm(`ATENÇÃO: Deseja apagar o evento "${ev.name}"? Isso não removerá as artes criadas nem os arquivos associados, mas removerá o projeto da listagem.`);
-    if (!confirm) return;
-
-    try {
-      await deleteDoc(doc(db, 'events', ev.id));
-      toast.success("Evento apagado com sucesso.");
-    } catch (err) {
-      toast.error("Erro ao apagar evento.");
-      console.error(err);
-    }
+    customConfirm(
+      "Apagar Evento/Festa",
+      `ATENÇÃO: Deseja apagar o evento "${ev.name}"? Isso não removerá as artes criadas nem os arquivos associados, mas removerá o projeto da listagem definitivamente.`,
+      async () => {
+        try {
+          await deleteDoc(doc(db, 'events', ev.id));
+          toast.success("Evento apagado com sucesso.");
+        } catch (err) {
+          toast.error("Erro ao apagar evento.");
+          console.error(err);
+        }
+      }
+    );
   };
 
   // Safe formatting helpers
@@ -947,6 +966,42 @@ export function AdminPanel({ profile }: AdminPanelProps) {
               className="rounded-xl h-12 bg-pink-500 hover:bg-pink-600 text-white font-bold"
             >
               Confirmar Alterações
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirmation Dialog */}
+      <Dialog open={isConfirmOpen} onOpenChange={setIsConfirmOpen}>
+        <DialogContent className="rounded-[2rem] sm:max-w-md glass border-white/10 text-slate-100 p-8">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-black text-rose-500 tracking-tight">
+              {confirmConfig?.title || 'Confirmação'}
+            </DialogTitle>
+            <DialogDescription className="text-slate-300 font-medium leading-relaxed pt-2">
+              {confirmConfig?.description}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-3 pt-4">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setIsConfirmOpen(false)}
+              className="rounded-xl h-12 text-slate-400"
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={async () => {
+                if (confirmConfig?.onConfirm) {
+                  await confirmConfig.onConfirm();
+                }
+                setIsConfirmOpen(false);
+              }}
+              className="rounded-xl h-12 bg-rose-600 hover:bg-rose-700 text-white font-bold"
+            >
+              Confirmar
             </Button>
           </DialogFooter>
         </DialogContent>

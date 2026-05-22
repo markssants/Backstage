@@ -89,6 +89,8 @@ service cloud.firestore {
         isValidEvent(incoming()) &&
         incoming().diff(existing()).affectedKeys().hasAny(['name', 'logoUrl', 'driveUrl', 'status', 'designerId', 'contractorId', 'contractorName', 'city', 'eventDate', 'djCount', 'artCount', 'motionCount', 'location', 'contractorEmail', 'designerEmail', 'updatedAt'])
       );
+
+      allow delete: if isAdmin();
     }
 
     // --- Arts ---
