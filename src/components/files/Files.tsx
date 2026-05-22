@@ -44,7 +44,7 @@ export function Files({ event }: FilesProps) {
                 src={embedUrl}
                 width="100%"
                 height="550px"
-                className="rounded-[2.5rem] border-none invert hue-rotate-180 contrast-125"
+                className="rounded-[2.5rem] border-none"
                 allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
                 title="Google Drive"
               />

@@ -107,8 +107,8 @@ export function Overview({ event, profile }: OverviewProps) {
         <div className="absolute bottom-0 left-0 w-96 h-96 bg-pink-600 rounded-full blur-[100px] opacity-10 -ml-48 -mb-48 pointer-events-none"></div>
         
         <div className="relative z-10 flex flex-col md:flex-row items-center gap-8">
-          <div className="w-32 h-32 md:w-40 md:h-40 rounded-3xl bg-white/5 backdrop-blur-md p-3 border border-white/20 shadow-2xl shrink-0 overflow-hidden group">
-            <img src={event.logoUrl} alt={event.name} className="w-full h-full object-contain filter drop-shadow-[0_0_15px_rgba(255,255,255,0.3)] transition-transform group-hover:scale-110" />
+          <div className="w-32 h-32 md:w-40 md:h-40 rounded-3xl bg-white/5 backdrop-blur-md p-0 border border-white/20 shadow-2xl shrink-0 overflow-hidden group">
+            <img src={event.logoUrl} alt={event.name} className="w-full h-full object-cover filter drop-shadow-[0_0_15px_rgba(255,255,255,0.3)] transition-transform group-hover:scale-110" />
           </div>
           <div className="text-center md:text-left space-y-4 flex-1">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
