@@ -357,17 +357,17 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
               Adicionar DJ
             </Button>
           } />
-          <DialogContent className="rounded-3xl sm:max-w-[850px] w-[95vw] glass border-white/10 text-slate-100 p-6 md:p-8">
-            <DialogHeader>
-              <DialogTitle className="text-2xl font-black text-white tracking-tight flex items-center gap-2">
-                <Disc className="w-6 h-6 text-purple-400 animate-spin" style={{ animationDuration: '6s' }} />
+          <DialogContent className="rounded-[2rem] sm:max-w-[850px] w-[95vw] glass border-white/10 text-slate-100 p-4 sm:p-8 max-h-[92vh] overflow-hidden flex flex-col">
+            <DialogHeader className="shrink-0">
+              <DialogTitle className="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center gap-2">
+                <Disc className="w-5 h-5 sm:w-6 sm:h-6 text-purple-400 animate-spin" style={{ animationDuration: '6s' }} />
                 {editingId ? 'Editar Informações do DJ' : 'Cadastrar Novo DJ / Atração'}
               </DialogTitle>
             </DialogHeader>
-            <div className="flex flex-col gap-6 py-6 max-h-[70vh] overflow-y-auto px-1 pr-3 scrollbar-thin">
+            <div className="flex-1 flex flex-col gap-4 sm:gap-6 py-4 sm:py-6 overflow-y-auto px-1 pr-1 sm:pr-3 scrollbar-thin">
               
               {/* 1 - Identificação & Presskit */}
-              <div className="bg-white/[0.02] border border-white/5 rounded-3xl p-5 space-y-4">
+              <div className="bg-white/[0.02] border border-white/5 rounded-2xl sm:rounded-3xl p-4 sm:p-5 space-y-4">
                 <div className="flex items-center gap-2 pb-2 border-b border-white/5">
                   <User className="w-4 h-4 text-purple-400" />
                   <span className="text-[10px] uppercase font-black tracking-widest text-slate-300">1- Identificação & Presskit</span>
@@ -388,12 +388,12 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                 </div>
 
                 {editingId && (
-                  <div className="bg-purple-500/10 border border-purple-500/20 p-4 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div className="bg-purple-500/10 border border-purple-500/20 p-4 rounded-xl sm:rounded-2xl flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
                     <div className="space-y-0.5">
                       <p className="text-[10px] uppercase font-black tracking-widest text-purple-400 font-extrabold">
                         Link de Preenchimento Exclusivo para o DJ
                       </p>
-                      <p className="text-[11px] text-slate-400">
+                      <p className="text-[11px] text-slate-400 leading-relaxed">
                         Envie este link para o próprio DJ preencher suas mídias diretamente, sem precisar de login ou visualizar outras partes do painel!
                       </p>
                     </div>
@@ -404,7 +404,7 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                         navigator.clipboard.writeText(shareUrl);
                         toast.success("Link exclusivo copiado com sucesso!");
                       }}
-                      className="rounded-xl h-10 px-4 bg-purple-500 hover:bg-purple-600 text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 border-none shrink-0"
+                      className="rounded-xl h-11 sm:h-10 px-4 bg-purple-500 hover:bg-purple-600 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5 border-none shrink-0"
                     >
                       <Share2 className="w-3.5 h-3.5" />
                       Copiar Link
@@ -412,7 +412,7 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                   </div>
                 )}
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400">Status do Presskit</Label>
                     <div className="flex gap-1 bg-white/5 p-1 rounded-2xl border border-white/10">
@@ -462,7 +462,7 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
               </div>
 
               {/* 2 - Prazo de Entrega */}
-              <div className="bg-white/[0.02] border border-white/5 rounded-3xl p-5 space-y-4">
+              <div className="bg-white/[0.02] border border-white/5 rounded-2xl sm:rounded-3xl p-4 sm:p-5 space-y-4">
                 <div className="flex items-center gap-2 pb-2 border-b border-white/5">
                   <Calendar className="w-4 h-4 text-blue-400" />
                   <span className="text-[10px] uppercase font-black tracking-widest text-slate-300">2- Prazo de Entrega</span>
@@ -498,7 +498,7 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
               </div>
 
               {/* 3 - Logos Obrigatórios (Agências e Gravadoras) */}
-              <div className="bg-white/[0.02] border border-white/5 rounded-3xl p-5 space-y-4">
+              <div className="bg-white/[0.02] border border-white/5 rounded-2xl sm:rounded-3xl p-4 sm:p-5 space-y-4">
                 <div className="flex items-center justify-between pb-2 border-b border-white/5">
                   <div className="flex items-center gap-2">
                     <ShieldAlert className="w-4 h-4 text-amber-400" />
@@ -537,7 +537,7 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                         
                         <div className="space-y-3">
                           {newAsset.agencies?.map((agency, idx) => (
-                            <div key={idx} className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-white/[0.01] border border-white/5 p-3 rounded-2xl relative">
+                            <div key={idx} className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-white/[0.01] border border-white/5 p-3 rounded-2xl relative">
                               <div className="space-y-1">
                                 <Label className="text-[9px] uppercase font-bold tracking-widest text-slate-400 flex items-center justify-between">
                                   <span>Nome da Agência <span className="text-pink-500 font-bold">*</span></span>
@@ -636,7 +636,7 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                             >
                               <div className="space-y-3">
                                 {newAsset.labels?.map((label, idx) => (
-                                  <div key={idx} className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-white/[0.01] border border-white/5 p-3 rounded-2xl relative">
+                                  <div key={idx} className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-white/[0.01] border border-white/5 p-3 rounded-2xl relative">
                                     <div className="space-y-1">
                                       <Label className="text-[9px] uppercase font-bold tracking-widest text-slate-400 flex items-center justify-between">
                                         <span>Nome da Gravadora <span className="text-pink-500 font-bold">*</span></span>
@@ -711,7 +711,7 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
               </div>
 
               {/* 4 - Escolher Foto e Vídeo */}
-              <div className="bg-white/[0.02] border border-white/5 rounded-3xl p-5 space-y-4">
+              <div className="bg-white/[0.02] border border-white/5 rounded-2xl sm:rounded-3xl p-4 sm:p-5 space-y-4">
                 <div className="flex items-center justify-between pb-2 border-b border-white/5">
                   <div className="flex items-center gap-2">
                     <Image className="w-4 h-4 text-emerald-400" />
@@ -755,7 +755,7 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
               </div>
 
               {/* 5 - Escolher Track */}
-              <div className="bg-white/[0.02] border border-white/5 rounded-3xl p-5 space-y-4">
+              <div className="bg-white/[0.02] border border-white/5 rounded-2xl sm:rounded-3xl p-4 sm:p-5 space-y-4">
                 <div className="flex items-center justify-between pb-2 border-b border-white/5">
                   <div className="flex items-center gap-2">
                     <Music className="w-4 h-4 text-pink-400" />
@@ -785,7 +785,7 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                         <Input value={newAsset.musicName || ''} onChange={e => setNewAsset({...newAsset, musicName: e.target.value})} placeholder="Ex: Hear Me Now" className="rounded-2xl bg-white/5 border-white/10 text-white h-12" />
                       </div>
 
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400 flex items-center gap-1">
                             Link da Música <span className="text-pink-500 font-bold">*</span>
@@ -807,19 +807,19 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
               </div>
 
             </div>
-            <DialogFooter className="pt-4 border-t border-white/5 flex flex-col sm:flex-row gap-3">
+            <DialogFooter className="pt-4 border-t border-white/5 flex flex-col-reverse sm:flex-row gap-2 sm:gap-3 shrink-0">
               <Button 
                 type="button" 
                 variant="outline" 
                 onClick={() => setIsOpen(false)} 
-                className="w-full sm:w-1/3 rounded-2xl h-14 border-white/10 hover:bg-white/5 font-black text-slate-300 uppercase tracking-widest text-xs"
+                className="w-full sm:w-1/3 rounded-2xl h-12 sm:h-14 border-white/10 hover:bg-white/5 font-black text-slate-300 uppercase tracking-widest text-xs"
               >
                 Cancelar
               </Button>
               <Button 
                 onClick={handleSave} 
                 disabled={loading} 
-                className="w-full sm:w-2/3 bg-pink-500 hover:bg-pink-600 text-white rounded-2xl h-14 font-black shadow-[0_0_20px_rgba(236,72,153,0.3)] uppercase tracking-widest text-xs flex items-center justify-center gap-2"
+                className="w-full sm:w-2/3 bg-pink-500 hover:bg-pink-600 text-white rounded-2xl h-12 sm:h-14 font-black shadow-[0_0_20px_rgba(236,72,153,0.3)] uppercase tracking-widest text-xs flex items-center justify-center gap-2"
               >
                 {loading ? <Loader2 className="animate-spin" /> : editingId ? "Salvar Alterações" : "Adicionar à Programação"}
               </Button>

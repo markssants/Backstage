@@ -268,6 +268,7 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
         // Create the art card first
         const docRef = await addDoc(collection(db, 'events', event.id, 'arts'), {
           ...newArt,
+          eventId: event.id,
           title: newArt.title.trim(),
           description: newArt.description.trim(),
           priority: newArt.priority,
