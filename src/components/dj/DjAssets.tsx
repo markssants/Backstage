@@ -344,65 +344,16 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
   });
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex justify-between items-center">
+    <div className="space-y-6 p-4 sm:p-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="space-y-1">
-          <h2 className="text-sm font-black uppercase tracking-[0.2em] text-purple-400">Presskits & Playlist</h2>
-          <div className="flex gap-2">
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              onClick={() => setViewMode('grid')}
-              className={cn("h-7 rounded-xl px-4 text-[9px] font-black uppercase tracking-widest", viewMode === 'grid' ? "bg-white/10 text-white" : "text-slate-500 hover:text-slate-300")}
-            >
-              Lista
-            </Button>
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              onClick={() => setViewMode('calendar')}
-              className={cn("h-7 rounded-xl px-4 text-[9px] font-black uppercase tracking-widest", viewMode === 'calendar' ? "bg-white/10 text-white" : "text-slate-500 hover:text-slate-300")}
-            >
-              Calendário
-            </Button>
-          </div>
-          <div className="flex gap-2 mt-2">
-            {['all', 'low', 'medium', 'urgent'].map((p) => (
-              <Button
-                key={p}
-                variant="ghost"
-                size="sm"
-                onClick={() => setPriorityFilter(p)}
-                className={cn(
-                  "h-6 rounded-lg px-2 text-[8px] font-black uppercase tracking-widest border border-white/5",
-                  priorityFilter === p ? "bg-white/10 text-white border-white/20" : "text-slate-600 hover:text-slate-400"
-                )}
-              >
-                {p === 'all' ? 'Todas' : p === 'low' ? 'Baixa' : p === 'medium' ? 'Média' : 'Urgente'}
-              </Button>
-            ))}
-          </div>
-          <div className="flex gap-2 mt-2">
-            {(['all', 'pending', 'completed'] as const).map((s) => (
-              <Button
-                key={s}
-                variant="ghost"
-                size="sm"
-                onClick={() => setStatusFilter(s)}
-                className={cn(
-                  "h-6 rounded-lg px-2 text-[8px] font-black uppercase tracking-widest border border-white/5",
-                  statusFilter === s ? "bg-white/10 text-white border-white/20" : "text-slate-600 hover:text-slate-400"
-                )}
-              >
-                {s === 'all' ? 'Ver Todos' : s === 'pending' ? 'Pendentes' : 'Concluídos'}
-              </Button>
-            ))}
-          </div>
+          <h2 className="text-xl font-black uppercase tracking-[0.15em] text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-pink-400 to-indigo-400 italic">DJs & Presskits</h2>
+          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest italic">Controle de presskits, trilhas e logos obrigatórias</p>
         </div>
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
           <DialogTrigger render={
-            <Button onClick={handleOpenCreate} className="bg-white/5 text-white hover:bg-white/10 rounded-2xl h-12 px-6 border border-white/10 backdrop-blur-md font-bold transition-all hover:scale-105 active:scale-95">
-              <Plus className="w-4 h-4 mr-2 text-pink-500" />
+            <Button onClick={handleOpenCreate} className="bg-gradient-to-tr from-purple-500 to-pink-500 text-white rounded-2xl h-12 px-6 border-none font-black transition-all hover:scale-[1.02] active:scale-95 shadow-[0_0_20px_rgba(168,85,247,0.3)] w-full sm:w-auto">
+              <Plus className="w-4 h-4 mr-2" />
               Adicionar DJ
             </Button>
           } />
@@ -877,6 +828,89 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
         </Dialog>
       </div>
 
+      <div className="bg-white/[0.02] border border-white/5 rounded-3xl p-4 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4 backdrop-blur-md">
+        {/* View Selector */}
+        <div className="flex flex-col gap-1.5 flex-1 min-w-[160px]">
+          <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 italic pl-1">Exibição</span>
+          <div className="flex bg-black/40 p-1 rounded-2xl border border-white/5">
+            <button 
+              onClick={() => setViewMode('grid')}
+              className={cn(
+                "flex-1 h-9 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer",
+                viewMode === 'grid' ? "bg-white/10 text-white shadow-lg" : "text-slate-500 hover:text-slate-300"
+              )}
+            >
+              Lista
+            </button>
+            <button 
+              onClick={() => setViewMode('calendar')}
+              className={cn(
+                "flex-1 h-9 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer",
+                viewMode === 'calendar' ? "bg-white/10 text-white shadow-lg" : "text-slate-500 hover:text-slate-300"
+              )}
+            >
+              Calendário
+            </button>
+          </div>
+        </div>
+
+        {/* Priority Filter */}
+        <div className="flex flex-col gap-1.5 flex-[1.4] min-w-[220px]">
+          <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 italic pl-1">Prioridade da Arte</span>
+          <div className="flex bg-black/40 p-1 rounded-2xl border border-white/5 font-bold">
+            {[
+              { value: 'all', label: 'Todas' },
+              { value: 'low', label: 'Baixa' },
+              { value: 'medium', label: 'Média' },
+              { value: 'urgent', label: 'Urgente' }
+            ].map((p) => (
+              <button
+                key={p.value}
+                onClick={() => setPriorityFilter(p.value)}
+                className={cn(
+                  "flex-1 h-9 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all text-center cursor-pointer",
+                  priorityFilter === p.value
+                    ? p.value === 'urgent' ? "bg-rose-500/20 text-rose-400 border border-rose-500/10 shadow-inner" :
+                      p.value === 'medium' ? "bg-amber-500/20 text-amber-400 border border-amber-500/10 shadow-inner" :
+                      p.value === 'low' ? "bg-blue-500/20 text-blue-400 border border-blue-500/10 shadow-inner" :
+                      "bg-white/10 text-white"
+                    : "text-slate-500 hover:text-slate-300"
+                )}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Status Filter */}
+        <div className="flex flex-col gap-1.5 flex-[1.2] min-w-[190px]">
+          <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 italic pl-1">Status do Presskit</span>
+          <div className="flex bg-black/40 p-1 rounded-2xl border border-white/5 font-bold">
+            {[
+              { value: 'all', label: 'Todos' },
+              { value: 'pending', label: 'Pendentes' },
+              { value: 'completed', label: 'Recebidos' }
+            ].map((s) => (
+              <button
+                key={s.value}
+                onClick={() => setStatusFilter(s.value as any)}
+                className={cn(
+                  "flex-1 h-9 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all text-center cursor-pointer",
+                  statusFilter === s.value
+                    ? s.value === 'completed' ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/10 shadow-inner" :
+                      s.value === 'pending' ? "bg-amber-500/20 text-amber-400 border border-amber-500/10 shadow-inner" :
+                      "bg-white/10 text-white"
+                    : "text-slate-500 hover:text-slate-300"
+                )}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
       {viewMode === 'grid' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredAssets.map(asset => (
@@ -1067,69 +1101,71 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
             <Button variant="ghost" onClick={nextMonth} className="text-white hover:bg-white/10 rounded-xl">Próximo</Button>
           </div>
 
-          <div className="grid grid-cols-7 gap-2">
-            {dayNames.map(day => (
-              <div key={day} className="text-center py-2 text-[10px] font-black uppercase tracking-widest text-slate-500 italic">
-                {day}
-              </div>
-            ))}
-            {calendarDays.map((date, idx) => {
-              if (!date) return <div key={`empty-${idx}`} className="bg-transparent h-40" />;
-              
-              const dateStr = date.toISOString().split('T')[0];
-              const dayAssets = filteredAssets.filter(a => a.artDeadline === dateStr);
-              const isToday = new Date().toDateString() === date.toDateString();
-
-              return (
-                <div 
-                  key={dateStr} 
-                  onDragOver={handleDragOver}
-                  onDrop={(e) => handleDrop(e, date)}
-                  className={cn(
-                    "min-h-40 bg-white/5 border border-white/5 rounded-3xl p-3 space-y-2 transition-all hover:bg-white/10",
-                    isToday && "border-purple-500/50 bg-purple-500/5"
-                  )}
-                >
-                  <div className="flex justify-between items-start mb-2">
-                    <span className={cn(
-                      "text-xs font-black italic",
-                      isToday ? "text-purple-400" : "text-slate-500"
-                    )}>
-                      {date.getDate()}
-                    </span>
-                    {dayAssets.length > 0 && (
-                      <span className="bg-pink-500 text-[8px] font-black px-1.5 py-0.5 rounded-full text-white uppercase">
-                        {dayAssets.length}
-                      </span>
-                    )}
-                  </div>
-                  <div className="space-y-1.5 overflow-y-auto max-h-[120px] scrollbar-hide">
-                    {dayAssets.map(asset => (
-                      <div 
-                        key={asset.id} 
-                        draggable
-                        onDragStart={(e) => handleDragStart(e, asset.id)}
-                        onClick={() => handleOpenEdit(asset)}
-                        className="bg-purple-500/10 border border-purple-500/20 p-2 rounded-xl cursor-grab active:cursor-grabbing hover:bg-purple-500/20 transition-colors group/item"
-                      >
-                        <p className="text-[9px] font-black text-white uppercase tracking-tight leading-tight group-hover/item:text-purple-400 truncate">
-                          {asset.name}
-                        </p>
-                        <div className="flex items-center gap-1 mt-1">
-                          <Disc className="w-2 h-2 text-indigo-400" />
-                          <span className="text-[8px] text-slate-400 font-bold italic truncate">Arte Pendente</span>
-                        </div>
-                      </div>
-                    ))}
-                    {dayAssets.length === 0 && (
-                      <div className="h-full flex items-center justify-center pt-8">
-                        <div className="w-1 h-1 rounded-full bg-white/5" />
-                      </div>
-                    )}
-                  </div>
+          <div className="w-full overflow-x-auto pb-4 custom-scrollbar">
+            <div className="grid grid-cols-7 gap-2 min-w-[750px] lg:min-w-0">
+              {dayNames.map(day => (
+                <div key={day} className="text-center py-2 text-[10px] font-black uppercase tracking-widest text-slate-500 italic">
+                  {day}
                 </div>
-              );
-            })}
+              ))}
+              {calendarDays.map((date, idx) => {
+                if (!date) return <div key={`empty-${idx}`} className="bg-transparent h-40" />;
+                
+                const dateStr = date.toISOString().split('T')[0];
+                const dayAssets = filteredAssets.filter(a => a.artDeadline === dateStr);
+                const isToday = new Date().toDateString() === date.toDateString();
+
+                return (
+                  <div 
+                    key={dateStr} 
+                    onDragOver={handleDragOver}
+                    onDrop={(e) => handleDrop(e, date)}
+                    className={cn(
+                      "min-h-40 bg-white/5 border border-white/5 rounded-3xl p-3 space-y-2 transition-all hover:bg-white/10",
+                      isToday && "border-purple-500/50 bg-purple-500/5"
+                    )}
+                  >
+                    <div className="flex justify-between items-start mb-2">
+                      <span className={cn(
+                        "text-xs font-black italic",
+                        isToday ? "text-purple-400" : "text-slate-500"
+                      )}>
+                        {date.getDate()}
+                      </span>
+                      {dayAssets.length > 0 && (
+                        <span className="bg-pink-500 text-[8px] font-black px-1.5 py-0.5 rounded-full text-white uppercase flex items-center justify-center">
+                          {dayAssets.length}
+                        </span>
+                      )}
+                    </div>
+                    <div className="space-y-1.5 overflow-y-auto max-h-[120px] scrollbar-hide">
+                      {dayAssets.map(asset => (
+                        <div 
+                          key={asset.id} 
+                          draggable
+                          onDragStart={(e) => handleDragStart(e, asset.id)}
+                          onClick={() => handleOpenEdit(asset)}
+                          className="bg-purple-500/10 border border-purple-500/20 p-2 rounded-xl cursor-grab active:cursor-grabbing hover:bg-purple-500/20 transition-colors group/item text-left"
+                        >
+                          <p className="text-[9px] font-black text-white uppercase tracking-tight leading-tight group-hover/item:text-purple-400 truncate">
+                            {asset.name}
+                          </p>
+                          <div className="flex items-center gap-1 mt-1">
+                            <Disc className="w-2 h-2 text-indigo-400" />
+                            <span className="text-[8px] text-slate-400 font-bold italic truncate">Arte Pendente</span>
+                          </div>
+                        </div>
+                      ))}
+                      {dayAssets.length === 0 && (
+                        <div className="h-full flex items-center justify-center pt-8">
+                          <div className="w-1 h-1 rounded-full bg-white/5" />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}

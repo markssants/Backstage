@@ -138,24 +138,24 @@ export function EventSelector({ profile, onEventCreated, onEventUpdated, isMinim
         <Button 
           variant={isMinimal ? "ghost" : (isEditing ? "outline" : "default")} 
           className={cn(
-            "rounded-2xl transition-all duration-300 font-bold",
+            "rounded-2xl transition-all duration-300 font-bold flex items-center justify-center shrink-0",
             isEditing 
-                ? "bg-white/5 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/10 h-10 px-4"
+                ? "bg-white/5 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/10 h-10 px-2.5 sm:px-4"
                 : (isMinimal 
-                  ? "bg-white/5 text-white hover:bg-white/10 border border-white/5 h-10 px-4" 
+                  ? "bg-white/5 text-white hover:bg-white/10 border border-white/5 h-10 px-2.5 sm:px-4" 
                   : "bg-gradient-to-tr from-purple-500 to-pink-500 text-white shadow-[0_0_15px_rgba(236,72,153,0.3)] hover:scale-105 h-12 px-6")
           )}
         />
       }>
         {isEditing ? (
           <>
-            <Settings2 className="w-4 h-4 mr-2" />
-            Editar Dados
+            <Settings2 className="w-4 h-4 sm:mr-2" />
+            <span className="hidden sm:inline text-xs sm:text-sm">Editar Dados</span>
           </>
         ) : (
           <>
-            <Plus className="w-4 h-4 mr-2" />
-            Novo Evento
+            <Plus className="w-4 h-4 sm:mr-2" />
+            <span className="hidden sm:inline text-xs sm:text-sm">Novo Evento</span>
           </>
         )}
       </DialogTrigger>

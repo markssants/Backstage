@@ -363,15 +363,15 @@ export function PendingChangesManager({ profile, selectedEventId }: PendingChang
         </div>
       </DialogTrigger>
 
-      <DialogContent className="rounded-[2.5rem] sm:max-w-[650px] glass border-white/10 text-slate-100 p-8 max-h-[85vh] overflow-hidden flex flex-col">
+      <DialogContent className="rounded-[2rem] sm:rounded-[2.5rem] w-[95vw] sm:max-w-[650px] glass border-white/10 text-slate-100 p-4 sm:p-8 max-h-[90vh] sm:max-h-[85vh] overflow-hidden flex flex-col">
         <DialogHeader className="shrink-0 mb-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row gap-4 sm:items-center sm:justify-between">
             <div>
-              <DialogTitle className="text-2xl font-black text-white tracking-tighter flex items-center gap-3">
-                <Bell className="w-6 h-6 text-pink-400 animate-pulse" />
+              <DialogTitle className="text-lg sm:text-2xl font-black text-white tracking-tighter flex items-center gap-2 sm:gap-3">
+                <Bell className="w-5 h-5 sm:w-6 sm:h-6 text-pink-400 animate-pulse" />
                 {isDesigner ? "Alterações do Cliente" : "Suas Solicitações"}
               </DialogTitle>
-              <p className="text-xs text-slate-400 mt-1">
+              <p className="text-[10px] sm:text-xs text-slate-400 mt-1">
                 {isDesigner 
                   ? "Revise, aprove ou recuse as solicitações de briefing enviadas pelo contratante abaixo."
                   : "Acompanhe abaixo o status e histórico de todas as alterações sugeridas para o designer."}
@@ -379,7 +379,7 @@ export function PendingChangesManager({ profile, selectedEventId }: PendingChang
             </div>
             
             {/* Tab Swappers */}
-            <div className="flex bg-black/40 p-1 rounded-xl border border-white/5">
+            <div className="flex bg-black/40 p-1 rounded-xl border border-white/5 self-start sm:self-auto">
               <button 
                 onClick={() => setActiveTab('pending')}
                 className={cn(
@@ -654,12 +654,12 @@ export function PendingChangesManager({ profile, selectedEventId }: PendingChang
 
                     {/* Approve / Reject buttons */}
                     {isDesigner ? (
-                      <div className="flex items-center gap-3 justify-end pt-1">
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 justify-end pt-1">
                         <Button
                           variant="ghost"
                           disabled={loadingId === change.id}
                           onClick={() => handleReject(change)}
-                          className="rounded-xl text-xs font-black text-rose-400 hover:text-white hover:bg-rose-600/20"
+                          className="rounded-xl text-xs font-black text-rose-400 hover:text-white hover:bg-rose-600/20 w-full sm:w-auto h-11 sm:h-9"
                         >
                           <X className="w-4 h-4 mr-1.5" />
                           Recusar
@@ -667,7 +667,7 @@ export function PendingChangesManager({ profile, selectedEventId }: PendingChang
                         <Button
                           disabled={loadingId === change.id}
                           onClick={() => handleApprove(change)}
-                          className="rounded-xl text-xs font-black bg-emerald-500 hover:bg-emerald-600 text-white shadow-md shadow-emerald-500/10"
+                          className="rounded-xl text-xs font-black bg-emerald-500 hover:bg-emerald-600 text-white shadow-md shadow-emerald-500/10 w-full sm:w-auto h-11 sm:h-9"
                         >
                           <Check className="w-4 h-4 mr-1.5" />
                           Aprovar Alteração
@@ -728,11 +728,11 @@ export function PendingChangesManager({ profile, selectedEventId }: PendingChang
 
       {/* Dialog Detalhado do Histórico */}
       <Dialog open={!!selectedHistoryChange} onOpenChange={(o) => { if (!o) setSelectedHistoryChange(null); }}>
-        <DialogContent className="rounded-[2.5rem] sm:max-w-[550px] glass border-white/10 text-slate-100 p-8 max-h-[85vh] overflow-y-auto custom-scrollbar flex flex-col gap-6">
+        <DialogContent className="rounded-[2rem] sm:rounded-[2.5rem] w-[95vw] sm:max-w-[550px] glass border-white/10 text-slate-100 p-4 sm:p-8 max-h-[90vh] sm:max-h-[85vh] overflow-y-auto custom-scrollbar flex flex-col gap-4 sm:gap-6">
           {selectedHistoryChange && (
             <>
               <DialogHeader>
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
                     <div className={cn(
                       "p-3 rounded-2xl flex items-center justify-center text-white shrink-0",

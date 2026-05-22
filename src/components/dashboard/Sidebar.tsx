@@ -37,7 +37,7 @@ export function Sidebar({ activeView, setActiveView, profile, onLogout }: Sideba
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       transition={{ type: "spring", stiffness: 300, damping: 30 }}
-      className="h-screen glass-sidebar text-slate-400 flex flex-col z-50 overflow-hidden shrink-0"
+      className="hidden md:flex h-screen glass-sidebar text-slate-400 flex-col z-50 overflow-hidden shrink-0"
     >
       <div className="flex flex-col flex-1 p-4 transition-all duration-300">
         <div 

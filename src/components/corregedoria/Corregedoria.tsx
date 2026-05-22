@@ -126,11 +126,11 @@ export function Corregedoria({ event, profile }: { event: EventProject, profile:
           <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest italic">Armazenamento seguro de arquivos do evento</p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 bg-white/5 p-1.5 rounded-2xl border border-white/5 backdrop-blur-md">
+        <div className="flex items-center gap-1 sm:gap-2 bg-white/5 p-1 sm:p-1.5 rounded-2xl border border-white/5 backdrop-blur-md w-full sm:w-auto justify-between sm:justify-start">
           <button
             onClick={() => setFilter('all')}
             className={cn(
-              "px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
+              "hidden sm:block px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
               filter === 'all' ? "bg-white/10 text-white shadow-lg" : "text-slate-500 hover:text-slate-300"
             )}
           >
@@ -139,7 +139,7 @@ export function Corregedoria({ event, profile }: { event: EventProject, profile:
           <button
             onClick={() => setFilter('contract')}
             className={cn(
-              "px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
+              "flex-1 sm:flex-initial text-center px-2.5 sm:px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
               filter === 'contract' ? "bg-indigo-500/20 text-indigo-400 shadow-lg" : "text-slate-500 hover:text-slate-300"
             )}
           >
@@ -148,7 +148,7 @@ export function Corregedoria({ event, profile }: { event: EventProject, profile:
           <button
             onClick={() => setFilter('receipt')}
             className={cn(
-              "px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
+              "flex-1 sm:flex-initial text-center px-2.5 sm:px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
               filter === 'receipt' ? "bg-emerald-500/20 text-emerald-400 shadow-lg" : "text-slate-500 hover:text-slate-300"
             )}
           >
@@ -157,7 +157,7 @@ export function Corregedoria({ event, profile }: { event: EventProject, profile:
           <button
             onClick={() => setFilter('proposal')}
             className={cn(
-              "px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
+              "flex-1 sm:flex-initial text-center px-2.5 sm:px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
               filter === 'proposal' ? "bg-amber-500/20 text-amber-400 shadow-lg" : "text-slate-500 hover:text-slate-300"
             )}
           >

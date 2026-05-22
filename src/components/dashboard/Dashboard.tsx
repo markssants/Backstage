@@ -3,6 +3,7 @@ import { UserProfile, EventProject, OperationType, ViewType } from '../../types'
 import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
 import { db, auth, handleFirestoreError } from '../../firebase';
 import { Sidebar } from './Sidebar';
+import { MobileNavigation } from './MobileNavigation';
 import { Overview } from './Overview';
 import { KanbanBoard } from '../kanban/Board';
 import { DjAssets } from '../dj/DjAssets';
@@ -65,6 +66,13 @@ export function Dashboard({ profile }: DashboardProps) {
         onLogout={handleLogout}
       />
       
+      <MobileNavigation 
+        activeView={activeView} 
+        setActiveView={setActiveView} 
+        profile={profile}
+        onLogout={handleLogout}
+      />
+      
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header 
           profile={profile} 
@@ -72,9 +80,10 @@ export function Dashboard({ profile }: DashboardProps) {
           selectedEventId={selectedEventId}
           setSelectedEventId={setSelectedEventId}
           activeView={activeView}
+          setActiveView={setActiveView}
         />
         
-        <main className="flex-1 overflow-y-auto p-6 md:p-8">
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 pb-24 md:pb-8">
           {activeView === 'profile' && <ProfileManagement profile={profile} />}
           {activeView === 'about' && <About />}
           {activeView === 'admin' && profile.email === 'beysarts@gmail.com' && <AdminPanel profile={profile} />}
