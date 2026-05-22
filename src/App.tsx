@@ -257,7 +257,7 @@ function Landing({ handleLogin, loginLoading }: { handleLogin: () => void, login
         )}
       </AnimatePresence>
       <div className="absolute bottom-8 text-[10px] font-black text-white tracking-[0.3em] uppercase opacity-40">
-        v2.5
+        v2.8
       </div>
     </div>
   );

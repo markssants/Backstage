@@ -101,7 +101,7 @@ service cloud.firestore {
                data.position is number &&
                isValidId(data.eventId) &&
                (!('description' in data) || (data.description is string && data.description.size() <= 2000)) &&
-               (!('deadline' in data) || (data.deadline is string)) &&
+               (!('deadline' in data) || (data.deadline is string || data.deadline == null)) &&
                (!('color' in data) || (data.color is string && data.color.size() <= 20)) &&
                (!('createdAt' in data) || (data.createdAt is timestamp || data.createdAt == null));
       }

@@ -64,7 +64,7 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
     title: '',
     description: '',
     priority: 'medium' as const,
-    category: 'dj' as const,
+    category: 'party' as const,
     deadline: '',
     color: '#000000',
     status: 'todo' as ColumnId
@@ -281,7 +281,7 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
         title: '', 
         description: '', 
         priority: 'medium', 
-        category: 'dj', 
+        category: 'party', 
         deadline: '', 
         color: '#000000',
         status: 'todo'

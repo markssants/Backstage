@@ -45,13 +45,13 @@ export function Sidebar({ activeView, setActiveView, profile, onLogout }: Sideba
           className="flex items-center text-white mb-10 mt-2 min-h-[40px] px-2 overflow-hidden cursor-pointer group/logo hover:opacity-80 transition-all active:scale-95"
         >
           <div className={cn(
-            "w-12 h-12 bg-black rounded-2xl flex items-center justify-center overflow-hidden shadow-[0_0_20px_rgba(0,0,0,0.5)] shrink-0 mr-3 transition-transform p-1.5",
+            "w-12 h-12 bg-black rounded-2xl flex items-center justify-center overflow-hidden shadow-[0_0_20px_rgba(0,0,0,0.5)] shrink-0 mr-3 transition-transform p-0",
             activeView === 'about' && "shadow-[0_0_30px_rgba(236,72,153,0.3)] scale-110"
           )}>
             <img 
-              src="/src/components/kanban/batcav.png" 
+              src="https://i.ibb.co/Jw9v1n5x/b.png" 
               alt="Logo" 
-              className="w-full h-full object-contain"
+              className="w-full h-full object-cover"
               referrerPolicy="no-referrer"
             />
           </div>
@@ -170,8 +170,8 @@ export function Sidebar({ activeView, setActiveView, profile, onLogout }: Sideba
                   exit={{ opacity: 0, x: -10 }}
                   className="flex items-center justify-between flex-1 min-w-0"
                 >
-                  <span className="truncate">Sair</span>
-                  <span className="text-[9px] text-slate-400 font-black opacity-70 uppercase tracking-widest ml-2 shrink-0">v2.5</span>
+                  <span className="truncate flex items-center justify-between flex-grow">Sair</span>
+                  <span className="text-[9px] text-slate-400 font-black opacity-70 uppercase tracking-widest ml-2 shrink-0">v2.8</span>
                 </motion.div>
               )}
             </AnimatePresence>
