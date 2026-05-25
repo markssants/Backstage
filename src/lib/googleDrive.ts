@@ -103,31 +103,6 @@ export async function getDriveAccessToken(): Promise<string | null> {
   return null;
 }
 
-async function makeFilePublic(fileId: string, accessToken: string): Promise<boolean> {
-  try {
-    const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}/permissions`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        role: 'reader',
-        type: 'anyone',
-      }),
-    });
-    return res.ok;
-  } catch (err) {
-    console.error("Erro ao definir as permissões do arquivo como públicas:", err);
-    return false;
-  }
-}
-
-async function getOrCreateBackstageFolder(accessToken: string): Promise<string> {
-  // Sempre enviar arquivos direto para a pasta padrão solicitada pelo designer
-  return "1qoycH41-DFLKIssqMitdWqkdHP--7LFI";
-}
-
 async function uploadViaAppsScript(
   file: File,
   appsScriptUrl: string,
@@ -140,8 +115,8 @@ async function uploadViaAppsScript(
         const base64Content = (reader.result as string).split(',')[1];
         
         const xhr = new XMLHttpRequest();
-        xhr.open('POST', appsScriptUrl, true);
-        xhr.setRequestHeader('Content-Type', 'text/plain;charset=utf-8');
+        xhr.open('POST', '/api/gdrive-proxy', true);
+        xhr.setRequestHeader('Content-Type', 'application/json');
         
         xhr.upload.addEventListener('progress', (e) => {
           if (e.lengthComputable) {
@@ -158,22 +133,29 @@ async function uploadViaAppsScript(
                 onProgress(100);
                 resolve(res.url);
               } else {
-                reject(new Error(res.message || "O Script do Google retornou erro no upload."));
+                reject(new Error(res.error || res.message || "O Script do Google retornou erro no upload."));
               }
             } catch (err) {
-              console.error("[AppsScript Fail Response]", xhr.responseText);
-              reject(new Error("Resposta inválida do Script do Google. Confirme se implantou o Web App com 'Quem tem acesso: Qualquer pessoa' e se colou o link de implantação correto."));
+              console.error("[Proxy Response Error]", xhr.responseText);
+              reject(new Error("Resposta inválida do Proxy do Google Drive. Verifique a implantação do Apps Script."));
             }
           } else {
-            reject(new Error(`O Script do Google retornou erro HTTP ${xhr.status}.`));
+            try {
+              const res = JSON.parse(xhr.responseText);
+              reject(new Error(res.error || `O Servidor retornou código de erro HTTP ${xhr.status}.`));
+            } catch {
+              reject(new Error(`O Servidor retornou código de erro HTTP ${xhr.status}.`));
+            }
           }
         };
         
         xhr.onerror = () => {
-          reject(new Error("Não foi possível conectar ao Script do Google Drive. Verifique seu link e conexão."));
+          reject(new Error("Não foi possível conectar ao servidor para fazer o upload do Drive."));
         };
         
         xhr.send(JSON.stringify({
+          action: 'apps_script',
+          url: appsScriptUrl,
           filename: file.name,
           mimeType: file.type || 'application/octet-stream',
           base64: base64Content
@@ -182,7 +164,7 @@ async function uploadViaAppsScript(
         reject(err);
       }
     };
-    reader.onerror = () => reject(new Error("Falha ao processar o arquivo local."));
+    reader.onerror = () => reject(new Error("Falha ao ler o arquivo para upload."));
     reader.readAsDataURL(file);
   });
 }
@@ -202,69 +184,64 @@ export async function uploadFileToGoogleDrive(
     return uploadViaAppsScript(file, appsScriptUrl, onProgress);
   }
 
-  // Método padrão: Google Drive REST API direta via OAuth token
-  const parentFolderId = await getOrCreateBackstageFolder(accessToken);
-
-  // Passo 1: Criar metadados do arquivo na pasta de destino
-  const metadataRes = await fetch('https://www.googleapis.com/drive/v3/files', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      name: file.name,
-      mimeType: file.type || 'application/octet-stream',
-      parents: [parentFolderId],
-    }),
-  });
-
-  if (!metadataRes.ok) {
-    const errorText = await metadataRes.text();
-    throw new Error(`Falha ao criar o arquivo no Google Drive: ${errorText}`);
-  }
-
-  const metadata = await metadataRes.json();
-  const fileId = metadata.id;
-
-  if (!fileId) {
-    throw new Error("ID do arquivo criado no Google Drive não foi inicializado.");
-  }
-
-  // Passo 2: Fazer upload das mídias utilizando requisição direta
+  // Método padrão: Google Drive REST API direta via OAuth token => Proxy em server.ts para resolver CORS
   return new Promise<string>((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open('PATCH', `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`);
-    xhr.setRequestHeader('Authorization', `Bearer ${accessToken}`);
-    xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
-
-    xhr.upload.addEventListener('progress', (event) => {
-      if (event.lengthComputable) {
-        const progress = Math.round((event.loaded / event.total) * 100);
-        onProgress(progress);
-      }
-    });
-
-    xhr.onload = async () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        try {
-          // Passo 3: Tornar o link público de visualização herdeira
-          await makeFilePublic(fileId, accessToken);
-          const directUrl = `https://drive.google.com/uc?id=${fileId}&export=download&name=${encodeURIComponent(file.name)}`;
-          resolve(directUrl);
-        } catch (err) {
-          const directUrl = `https://drive.google.com/uc?id=${fileId}&export=download&name=${encodeURIComponent(file.name)}`;
-          resolve(directUrl);
-        }
-      } else {
-        reject(new Error(`Erro de envio API: Servidor do Google retornou status ${xhr.status}`));
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const base64Content = (reader.result as string).split(',')[1];
+        
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '/api/gdrive-proxy', true);
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        
+        xhr.upload.addEventListener('progress', (e) => {
+          if (e.lengthComputable) {
+            const progress = Math.round((e.loaded / e.total) * 100);
+            onProgress(Math.min(98, progress)); 
+          }
+        });
+        
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              const res = JSON.parse(xhr.responseText);
+              if (res.status === 'success' && res.url) {
+                onProgress(100);
+                resolve(res.url);
+              } else {
+                reject(new Error(res.error || res.message || "Erro no upload via proxy."));
+              }
+            } catch (err) {
+              console.error("[Proxy Response Error]", xhr.responseText);
+              reject(new Error("Resposta inválida do Proxy do Google Drive."));
+            }
+          } else {
+            try {
+              const res = JSON.parse(xhr.responseText);
+              reject(new Error(res.error || `O Servidor retornou código de erro HTTP ${xhr.status}.`));
+            } catch {
+              reject(new Error(`O Servidor retornou código de erro HTTP ${xhr.status}.`));
+            }
+          }
+        };
+        
+        xhr.onerror = () => {
+          reject(new Error("Não foi possível conectar ao servidor para fazer o upload do Drive."));
+        };
+        
+        xhr.send(JSON.stringify({
+          action: 'google_drive',
+          accessToken,
+          filename: file.name,
+          mimeType: file.type || 'application/octet-stream',
+          base64: base64Content
+        }));
+      } catch (err: any) {
+        reject(err);
       }
     };
-
-    xhr.onerror = () => {
-      reject(new Error("Erro de conexão com o Google Drive durante o envio."));
-    };
-
-    xhr.send(file);
+    reader.onerror = () => reject(new Error("Falha ao ler o arquivo para upload."));
+    reader.readAsDataURL(file);
   });
 }
