@@ -123,11 +123,6 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!storage) {
-      toast.error("O serviço de upload direto não está configurado.");
-      return;
-    }
-
     // Validate size
     const fileSizeMB = file.size / (1024 * 1024);
     if (fileSizeMB > maxSizeMB) {
@@ -185,43 +180,45 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
       console.warn("Upload para o Google Drive falhou ou Google Drive não configurado, tentando fallbacks (Firebase/Local)...", gdriveErr);
 
       // Fallback 1: Firebase Storage
-      try {
-        const refinedFileName = `${Date.now()}_${file.name.replace(/\s+/g, '_')}`;
-        const storagePath = `events/${eventId}/dj_assets/${refinedFileName}`;
-        const fileRef = ref(storage, storagePath);
-        
-        const uploadTask = uploadBytesResumable(fileRef, file);
-        const downloadUrl = await new Promise<string>((resolve, reject) => {
-          uploadTask.on(
-            'state_changed',
-            (snapshot) => {
-              const progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
-              setUploadProgress(prev => ({ ...prev, [fieldKey]: progress }));
-            },
-            (error) => {
-              reject(error);
-            },
-            async () => {
-              try {
-                const url = await getDownloadURL(uploadTask.snapshot.ref);
-                resolve(url);
-              } catch (err) {
-                reject(err);
+      if (storage) {
+        try {
+          const refinedFileName = `${Date.now()}_${file.name.replace(/\s+/g, '_')}`;
+          const storagePath = `events/${eventId}/dj_assets/${refinedFileName}`;
+          const fileRef = ref(storage, storagePath);
+          
+          const uploadTask = uploadBytesResumable(fileRef, file);
+          const downloadUrl = await new Promise<string>((resolve, reject) => {
+            uploadTask.on(
+              'state_changed',
+              (snapshot) => {
+                const progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+                setUploadProgress(prev => ({ ...prev, [fieldKey]: progress }));
+              },
+              (error) => {
+                reject(error);
+              },
+              async () => {
+                try {
+                  const url = await getDownloadURL(uploadTask.snapshot.ref);
+                  resolve(url);
+                } catch (err) {
+                  reject(err);
+                }
               }
-            }
-          );
-        });
-        
-        if (fieldKey === 'musicUrl') {
-          setMusicUrl(downloadUrl);
-          setMusicUrlType('file');
-          setMusicName(curr => curr || file.name.replace(/\.[^/.]+$/, ""));
-          setDurationMode('visual'); // Switch to visual on successful upload!
-          toast.success("Música enviada com sucesso (Firebase Storage)!");
+            );
+          });
+          
+          if (fieldKey === 'musicUrl') {
+            setMusicUrl(downloadUrl);
+            setMusicUrlType('file');
+            setMusicName(curr => curr || file.name.replace(/\.[^/.]+$/, ""));
+            setDurationMode('visual'); // Switch to visual on successful upload!
+            toast.success("Música enviada com sucesso (Firebase Storage)!");
+          }
+          return;
+        } catch (err: any) {
+          console.warn("Firebase Storage failed, attempting local server upload fallback...", err);
         }
-        return;
-      } catch (err: any) {
-        console.warn("Firebase Storage failed, attempting local server upload fallback...", err);
       }
 
       // Fallback 2: Local Node dev server upload

@@ -52,56 +52,8 @@ async function makeFilePublic(fileId: string, accessToken: string): Promise<bool
 }
 
 async function getOrCreateBackstageFolder(accessToken: string): Promise<string> {
-  const query = "name = 'Backstage' and mimeType = 'application/vnd.google-apps.folder' and trashed = false";
-  const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id)`;
-  
-  try {
-    const res = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-      },
-    });
-    
-    if (res.ok) {
-      const data = await res.json();
-      if (data.files && data.files.length > 0) {
-        return data.files[0].id;
-      }
-    }
-  } catch (err) {
-    console.error("Erro ao procurar pasta Backstage em Google Drive:", err);
-  }
-
-  // Se não foi encontrada, cria a pasta
-  try {
-    const createRes = await fetch('https://www.googleapis.com/drive/v3/files', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        name: 'Backstage',
-        mimeType: 'application/vnd.google-apps.folder',
-      }),
-    });
-
-    if (createRes.ok) {
-      const folderMetadata = await createRes.json();
-      if (folderMetadata.id) {
-        // Define permissões da pasta para público ler (opcional, ajuda na herança)
-        await makeFilePublic(folderMetadata.id, accessToken);
-        return folderMetadata.id;
-      }
-    }
-    const errText = await createRes.text();
-    console.error("Falha ao criar pasta Backstage:", errText);
-  } catch (err) {
-    console.error("Erro ao criar pasta Backstage:", err);
-  }
-  
-  throw new Error("Não foi possível localizar ou criar a pasta 'Backstage' no seu Google Drive.");
+  // Always upload directly to the specific folder specified by the user
+  return "1qoycH41-DFLKIssqMitdWqkdHP--7LFI";
 }
 
 export async function uploadFileToGoogleDrive(
