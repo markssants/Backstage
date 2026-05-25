@@ -137,14 +137,16 @@ async function uploadViaAppsScript(
               }
             } catch (err) {
               console.error("[Proxy Response Error]", xhr.responseText);
-              reject(new Error("Resposta inválida do Proxy do Google Drive. Verifique a implantação do Apps Script."));
+              const preview = xhr.responseText ? xhr.responseText.substring(0, 120) : "Vazio";
+              reject(new Error(`Resposta inválida do Proxy (Não é JSON): ${preview}`));
             }
           } else {
             try {
               const res = JSON.parse(xhr.responseText);
               reject(new Error(res.error || `O Servidor retornou código de erro HTTP ${xhr.status}.`));
             } catch {
-              reject(new Error(`O Servidor retornou código de erro HTTP ${xhr.status}.`));
+              const preview = xhr.responseText ? xhr.responseText.substring(0, 120) : "Sem detalhes";
+              reject(new Error(`O Servidor retornou erro HTTP ${xhr.status}. Detalhes: ${preview}`));
             }
           }
         };
@@ -214,14 +216,16 @@ export async function uploadFileToGoogleDrive(
               }
             } catch (err) {
               console.error("[Proxy Response Error]", xhr.responseText);
-              reject(new Error("Resposta inválida do Proxy do Google Drive."));
+              const preview = xhr.responseText ? xhr.responseText.substring(0, 120) : "Vazio";
+              reject(new Error(`Resposta inválida do Proxy (Não é JSON): ${preview}`));
             }
           } else {
             try {
               const res = JSON.parse(xhr.responseText);
               reject(new Error(res.error || `O Servidor retornou código de erro HTTP ${xhr.status}.`));
             } catch {
-              reject(new Error(`O Servidor retornou código de erro HTTP ${xhr.status}.`));
+              const preview = xhr.responseText ? xhr.responseText.substring(0, 120) : "Sem detalhes";
+              reject(new Error(`O Servidor retornou erro HTTP ${xhr.status}. Detalhes: ${preview}`));
             }
           }
         };

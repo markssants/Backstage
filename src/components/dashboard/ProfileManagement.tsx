@@ -34,24 +34,43 @@ interface ProfileManagementProps {
 }
 
 const APPS_SCRIPT_CODE = `function doGet(e) {
-  var url = ScriptApp.getService().getUrl();
-  var isDev = url.indexOf("/dev") !== -1;
-  return ContentService.createTextOutput(JSON.stringify({
-    status: "online",
-    message: "Conector Backstage para Google Drive está ativo!",
-    isDevMode: isDev,
-    tip: isDev 
-      ? "ATENÇÃO: Você abriu um link de teste terminando em /dev. Para o formulário do Backstage funcionar, você precisa usar o link de produção terminando em /exec que o Google fornece ao clicar em Implantação (Deploy) -> Gerenciar Implantações (Manage Deployments)."
-      : "Pronto! Copie este link da barra de endereços (terminante em /exec) e insira nas configurações do perfil do Backstage.",
-    targetFolderId: "1qoycH41-DFLKIssqMitdWqkdHP--7LFI"
-  }, null, 2)).setMimeType(ContentService.MimeType.JSON);
+  try {
+    var url = ScriptApp.getService().getUrl();
+    var isDev = url.indexOf("/dev") !== -1;
+    return ContentService.createTextOutput(JSON.stringify({
+      status: "online",
+      message: "Conector Backstage para Google Drive está ativo!",
+      isDevMode: isDev,
+      tip: isDev 
+        ? "ATENÇÃO: Você abriu um link de teste terminando em /dev. Para o formulário do Backstage funcionar, você precisa usar o link de produção terminado em /exec que o Google fornece ao clicar em Implantação (Deploy) -> Gerenciar Implantações (Manage Deployments)."
+        : "Pronto! Copie este link da barra de endereços (terminante em /exec) e insira nas configurações do perfil do Backstage.",
+    }, null, 2)).setMimeType(ContentService.MimeType.JSON);
+  } catch(err) {
+    return ContentService.createTextOutput(JSON.stringify({
+      status: "error",
+      message: err.toString()
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
 }
 
 function doPost(e) {
   try {
     var data = JSON.parse(e.postData.contents);
+    var folder;
     var folderId = "1qoycH41-DFLKIssqMitdWqkdHP--7LFI";
-    var folder = DriveApp.getFolderById(folderId);
+    
+    try {
+      folder = DriveApp.getFolderById(folderId);
+    } catch (folderErr) {
+      // Se a pasta compartilhada padrão não estiver acessível, cria ou reusa uma pasta pessoal
+      var folderName = "Backstage Uploads";
+      var folders = DriveApp.getFoldersByName(folderName);
+      if (folders.hasNext()) {
+        folder = folders.next();
+      } else {
+        folder = DriveApp.createFolder(folderName);
+      }
+    }
     
     // Decodifica o arquivo transmitido em Base64 para gravação binária nativa
     var decoded = Utilities.base64Decode(data.base64);
@@ -410,7 +429,7 @@ export function ProfileManagement({ profile }: ProfileManagementProps) {
                     <li>Acesse <a href="https://script.google.com" target="_blank" rel="noreferrer" className="text-pink-400 underline inline-flex items-center gap-0.5">script.google.com <ExternalLink className="w-3 h-3" /></a> e clique em <strong>"Novo Projeto"</strong>.</li>
                     <li>Substitua todo o código existente lá pelo código mostrado no quadro abaixo.</li>
                     <li>Clique no ícone de salvar (disquete) e depois em <strong>"Implantar" (Deploy) &rarr; "Nova Implantação" (New Deployment)</strong>.</li>
-                    <li>Clique no ícone de engrenagem no canto de "Selecione o tipo" e escolha <strong>"Surgimento da Web" (Web App)</strong>.</li>
+                    <li>Clique no ícone de engrenagem no canto de "Selecione o tipo" e escolha <strong>"App da Web" (Web App)</strong>.</li>
                     <li>Escreva uma descrição (ex: "My Backstage Upload"), mude <strong>"Executar como"</strong> para <span className="text-pink-400 font-bold">"Eu ({profile.email})"</span> e o campo <strong>"Quem tem acesso"</strong> obrigatoriamente para <span className="text-pink-400 font-bold">"Qualquer pessoa" (Anyone)</span>.</li>
                     <li>Clique em <strong>"Implantar"</strong>, forneça as autorizações necessárias para a sua conta e copie a <strong>"URL da Web"</strong> gerada. Cole-o no campo abaixo!</li>
                   </ol>
