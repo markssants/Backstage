@@ -276,7 +276,7 @@ export function MobileNavigation({ activeView, setActiveView, profile, onLogout 
                     <LogOut className="w-4 h-4 mr-3" />
                     <span>Sair da Conta (Logout)</span>
                   </div>
-                  <span className="text-[9px] font-black tracking-widest opacity-60">v2.9</span>
+                  <span className="text-[9px] font-black tracking-widest opacity-60">v2.9.8</span>
                 </button>
               </div>
             </motion.div>

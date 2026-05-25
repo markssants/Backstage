@@ -1,12 +1,13 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { UserProfile } from "../../types";
-import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
-import { db } from "../../firebase";
+import { doc, updateDoc, serverTimestamp, setDoc, getDoc } from "firebase/firestore";
+import { db, auth } from "../../firebase";
+import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Palette, Users, Mail, User, ShieldCheck, Loader2 } from "lucide-react";
+import { Palette, Users, Mail, User, ShieldCheck, Loader2, Cloud, CheckCircle, RefreshCw, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { motion } from "motion/react";
 
@@ -20,6 +21,59 @@ export function ProfileManagement({ profile }: ProfileManagementProps) {
     name: profile.name,
     email: profile.email,
   });
+
+  const [driveEmail, setDriveEmail] = useState<string | null>(null);
+  const [driveLoading, setDriveLoading] = useState(false);
+  const [checkingDrive, setCheckingDrive] = useState(false);
+
+  useEffect(() => {
+    if (profile.email === 'beysarts@gmail.com') {
+      const fetchDriveStatus = async () => {
+        setCheckingDrive(true);
+        try {
+          const docSnap = await getDoc(doc(db, 'settings', 'google_drive'));
+          if (docSnap.exists()) {
+            setDriveEmail(docSnap.data().ownerEmail || 'Conectado');
+          } else {
+            setDriveEmail(null);
+          }
+        } catch (err) {
+          console.error("Erro ao carregar status do Google Drive:", err);
+        } finally {
+          setCheckingDrive(false);
+        }
+      };
+      fetchDriveStatus();
+    }
+  }, [profile.email]);
+
+  const handleConnectDrive = async () => {
+    setDriveLoading(true);
+    try {
+      const provider = new GoogleAuthProvider();
+      provider.addScope('https://www.googleapis.com/auth/drive.file');
+      
+      const result = await signInWithPopup(auth, provider);
+      const credential = GoogleAuthProvider.credentialFromResult(result);
+      if (credential?.accessToken) {
+        await setDoc(doc(db, 'settings', 'google_drive'), {
+          accessToken: credential.accessToken,
+          ownerEmail: result.user.email || 'beysarts@gmail.com',
+          updatedAt: serverTimestamp(),
+        }, { merge: true });
+        
+        setDriveEmail(result.user.email || 'beysarts@gmail.com');
+        toast.success("Google Drive conectado com sucesso para " + (result.user.email || 'beysarts@gmail.com') + "!");
+      } else {
+        throw new Error("Não foi possível obter o token de acesso do Google.");
+      }
+    } catch (err: any) {
+      console.error("Erro ao conectar Google Drive:", err);
+      toast.error("Erro ao conectar Google Drive: " + (err.message || 'Tente novamente'));
+    } finally {
+      setDriveLoading(false);
+    }
+  };
 
   const handleUpdate = async () => {
     if (!formData.name.trim()) {
@@ -121,6 +175,61 @@ export function ProfileManagement({ profile }: ProfileManagementProps) {
           </CardContent>
         </Card>
       </div>
+
+      {profile.email === 'beysarts@gmail.com' && (
+        <Card className="rounded-[2.5rem] glass border-pink-500/20 shadow-[0_0_30px_rgba(236,72,153,0.05)] overflow-hidden">
+          <CardHeader className="p-8 pb-4 animate-fade-in">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-2xl bg-pink-500/10 border border-pink-500/20 text-pink-500">
+                <Cloud className="w-6 h-6" />
+              </div>
+              <div>
+                <CardTitle className="text-lg font-black text-white uppercase tracking-tight">Vincular Armazenamento (Google Drive)</CardTitle>
+                <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">Configure o Google Drive padrão para o recebimento de arquivos</p>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="p-8 pt-2 space-y-6">
+            <p className="text-sm text-slate-300 font-medium leading-relaxed">
+              Como dono e designer do Backstage, todos os arquivos enviados por DJs e contratantes (Demos, Músicas, Presskits, Logotipos, Imagens) serão guardados diretamente na pasta <strong className="text-pink-400 font-black">’Backstage’</strong> do seu Google Drive. Outros usuários não precisam conceder acesso, pois o sistema usará o seu token de nuvem.
+            </p>
+
+            <div className="p-6 rounded-2xl bg-white/5 border border-white/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                  Status de Integração
+                </p>
+                {checkingDrive ? (
+                  <div className="flex items-center gap-2 text-slate-400 font-black text-xs uppercase tracking-wider">
+                    <Loader2 className="w-4 h-4 animate-spin text-pink-500" /> Verificando...
+                  </div>
+                ) : driveEmail ? (
+                  <div className="flex items-center gap-2 text-green-400 font-bold text-sm">
+                    <CheckCircle className="w-5 h-5 text-green-500" /> Conectado com <span className="underline">{driveEmail}</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 text-rose-400 font-bold text-sm">
+                    <AlertCircle className="w-5 h-5 text-rose-500" /> Google Drive Não Vinculado
+                  </div>
+                )}
+              </div>
+
+              <Button 
+                onClick={handleConnectDrive}
+                disabled={driveLoading || checkingDrive}
+                className="rounded-xl h-12 px-6 font-black uppercase tracking-wider text-[11px] bg-pink-500 hover:bg-pink-600 text-white flex items-center gap-2 shadow-lg transition-all active:scale-95"
+              >
+                {driveLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="w-4 h-4" />
+                )}
+                {driveEmail ? "RECONECTAR CONTA" : "VINCULAR MINHA CONTA"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
