@@ -30,7 +30,14 @@ async function startServer() {
 
     if (action === "apps_script") {
       if (!url) {
-        return res.status(400).json({ error: "Apps Script Web App URL is required." });
+        return res.status(400).json({ error: "URL do Apps Script é necessária." });
+      }
+
+      // Check if they pasted a dev link which is forbidden by Google for headless calls
+      if (url.includes("/dev")) {
+        return res.status(400).json({ 
+          error: "Você colou um link terminado em '/dev'. O Google exige que você utilize o link de produção terminado em '/exec' obtido em 'Implantar' -> 'Nova Implantação'." 
+        });
       }
 
       try {
@@ -50,29 +57,41 @@ async function startServer() {
         if (!scriptResponse.ok) {
           const errText = await scriptResponse.text();
           console.error(`[gdrive-proxy] Apps Script returned status ${scriptResponse.status}:`, errText);
-          return res.status(scriptResponse.status).json({ error: `Apps Script error: ${errText}` });
+          
+          if (scriptResponse.status === 404) {
+            return res.status(404).json({
+              error: "O link do Google Apps Script retornou Erro 404 (Não Encontrado). Verifique se você salvou a URL de forma correta, se ela termina com '/exec', e se a implantação está ativa e configurada como executada sob seu usuário e acessível por 'Qualquer pessoa'."
+            });
+          }
+          return res.status(scriptResponse.status).json({ error: `Erro no Apps Script (Status ${scriptResponse.status}): ${errText.substring(0, 500)}` });
         }
 
         const scriptData = await scriptResponse.json();
         console.log(`[gdrive-proxy] Apps Script upload response:`, scriptData);
+
+        // If the script itself returned a status error in JSON
+        if (scriptData.status === "error" || scriptData.error) {
+          return res.status(400).json({ error: scriptData.message || scriptData.error || "O Script retornou um erro interno no Google Drive." });
+        }
+
         return res.json(scriptData);
       } catch (err: any) {
         console.error(`[gdrive-proxy] Error in Apps Script proxy:`, err);
-        return res.status(500).json({ error: `Apps Script proxy connection failed: ${err.message}` });
+        return res.status(500).json({ error: `Falha na conexão com o Apps Script: ${err.message}. Certifique-se de que a implantação foi realizada no tipo 'Web App' e de que você copiou o link correto.` });
       }
     }
 
     if (action === "google_drive") {
       if (!accessToken) {
-        return res.status(400).json({ error: "OAuth access token is required." });
+        return res.status(400).json({ error: "Token de acesso OAuth é necessário." });
       }
 
       try {
         console.log(`[gdrive-proxy] Standard Google Drive REST API execution via Proxy server...`);
-        const parentFolderId = "1qoycH41-DFLKIssqMitdWqkdHP--7LFI";
+        let parentFolderId = "1qoycH41-DFLKIssqMitdWqkdHP--7LFI";
 
         // Step 1: Create metadata
-        const metadataRes = await fetch("https://www.googleapis.com/drive/v3/files", {
+        let metadataRes = await fetch("https://www.googleapis.com/drive/v3/files", {
           method: "POST",
           headers: {
             "Authorization": `Bearer ${accessToken}`,
@@ -85,17 +104,36 @@ async function startServer() {
           }),
         });
 
+        // Robust Fallback: If parent folder is hidden, deleted, or inaccessible for the connected account,
+        // fall back to "root" folder in their Google Drive to guarantee success!
+        if (!metadataRes.ok && (metadataRes.status === 404 || metadataRes.status === 403)) {
+          console.warn(`[gdrive-proxy] Parent folder ${parentFolderId} returned status ${metadataRes.status}. Falling back to 'root'.`);
+          parentFolderId = "root";
+          metadataRes = await fetch("https://www.googleapis.com/drive/v3/files", {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${accessToken}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              name: filename,
+              mimeType: mimeType || "application/octet-stream",
+              parents: [parentFolderId],
+            }),
+          });
+        }
+
         if (!metadataRes.ok) {
           const errText = await metadataRes.text();
           console.error(`[gdrive-proxy] Google Drive metadata creation failed:`, errText);
-          return res.status(metadataRes.status).json({ error: `Google Drive metadata creation failed: ${errText}` });
+          return res.status(metadataRes.status).json({ error: `Falha ao criar o arquivo no Google Drive: ${errText}` });
         }
 
         const metadata = await metadataRes.json();
         const fileId = metadata.id;
 
         if (!fileId) {
-          return res.status(522).json({ error: "Google Drive failed to generate file ID." });
+          return res.status(522).json({ error: "Google Drive falhou ao gerar o ID do arquivo." });
         }
 
         // Convert base64 representation to server-side buffer to pipe raw binary
@@ -114,7 +152,7 @@ async function startServer() {
         if (!mediaRes.ok) {
           const errText = await mediaRes.text();
           console.error(`[gdrive-proxy] Google Drive media upload patch failed:`, errText);
-          return res.status(mediaRes.status).json({ error: `Google Drive media upload patch failed: ${errText}` });
+          return res.status(mediaRes.status).json({ error: `Falha no upload binário para o Google Drive: ${errText}` });
         }
 
         // Step 3: Grant public reader permission so URLs can stream/export
@@ -138,11 +176,11 @@ async function startServer() {
         return res.json({ status: "success", url: directUrl });
       } catch (err: any) {
         console.error(`[gdrive-proxy] Error in standard Google Drive proxy:`, err);
-        return res.status(500).json({ error: `Google Drive upload failed inside proxy: ${err.message}` });
+        return res.status(500).json({ error: `Falha no upload do Google Drive dentro do proxy: ${err.message}` });
       }
     }
 
-    return res.status(400).json({ error: `Unsupported or invalid action: ${action}` });
+    return res.status(400).json({ error: `Ação não suportada ou inválida: ${action}` });
   });
 
   // Local file upload endpoint with stream-based piping for ultimate robustness and performance
