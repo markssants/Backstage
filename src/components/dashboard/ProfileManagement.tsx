@@ -33,7 +33,21 @@ interface ProfileManagementProps {
   profile: UserProfile;
 }
 
-const APPS_SCRIPT_CODE = `function doPost(e) {
+const APPS_SCRIPT_CODE = `function doGet(e) {
+  var url = ScriptApp.getService().getUrl();
+  var isDev = url.indexOf("/dev") !== -1;
+  return ContentService.createTextOutput(JSON.stringify({
+    status: "online",
+    message: "Conector Backstage para Google Drive está ativo!",
+    isDevMode: isDev,
+    tip: isDev 
+      ? "ATENÇÃO: Você abriu um link de teste terminando em /dev. Para o formulário do Backstage funcionar, você precisa usar o link de produção terminando em /exec que o Google fornece ao clicar em Implantação (Deploy) -> Gerenciar Implantações (Manage Deployments)."
+      : "Pronto! Copie este link da barra de endereços (terminante em /exec) e insira nas configurações do perfil do Backstage.",
+    targetFolderId: "1qoycH41-DFLKIssqMitdWqkdHP--7LFI"
+  }, null, 2)).setMimeType(ContentService.MimeType.JSON);
+}
+
+function doPost(e) {
   try {
     var data = JSON.parse(e.postData.contents);
     var folderId = "1qoycH41-DFLKIssqMitdWqkdHP--7LFI";
