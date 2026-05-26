@@ -15,7 +15,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "motion/react";
 import { WaveformSelector } from './WaveformSelector';
-import { getDriveAccessToken, uploadFileToGoogleDrive, getGoogleDriveFileId } from '../../lib/googleDrive';
+import { getDriveAccessToken, uploadFileToGoogleDrive, getGoogleDriveFileId, getOrRequestDriveToken } from '../../lib/googleDrive';
 
 interface DjAssetsProps {
   event: EventProject;
@@ -168,11 +168,11 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
     setUploadingState(prev => ({ ...prev, [fieldKey]: true }));
     setUploadProgress(prev => ({ ...prev, [fieldKey]: 0 }));
 
-    // Try Google Drive first
+    // Try Google Drive first (using active user's logged account Drive)
     try {
-      const accessToken = await getDriveAccessToken();
+      const accessToken = await getOrRequestDriveToken();
       if (!accessToken) {
-        throw new Error("Nenhum token do Google Drive encontrado no Firestore. Conecte sua conta do Google na tela de login para ativar o upload no Drive.");
+        throw new Error("Para realizar o upload, a permissão do Google Drive é obrigatória.");
       }
 
       console.log("Enviando arquivo para o Google Drive...");

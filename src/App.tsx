@@ -59,7 +59,9 @@ export default function App() {
     setLoginLoading(true);
     try {
       const provider = new GoogleAuthProvider();
+      // Apenas login simples, sem solicitar permissões de Drive
       await signInWithPopup(auth, provider);
+      console.log("Login efetuado com sucesso!");
     } catch (err: any) {
       if (err.code === 'auth/cancelled-popup-request' || err.code === 'auth/popup-closed-by-user') {
         console.log('Login cancelado pelo usuário');
@@ -256,7 +258,7 @@ function Landing({ handleLogin, loginLoading }: { handleLogin: () => void, login
         )}
       </AnimatePresence>
       <div className="absolute bottom-8 text-[10px] font-black text-white tracking-[0.3em] uppercase opacity-40">
-        v2.9.9
+        v2.9
       </div>
     </div>
   );
