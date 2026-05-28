@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, Music, ExternalLink, Clock, Trash2, Loader2, Disc, Calendar, ShieldAlert, BadgeCheck, Pencil, Film, Image, Sparkles, User, Share2, Upload, Paperclip } from "lucide-react";
+import { Plus, Music, ExternalLink, Clock, Trash2, Loader2, Disc, Calendar, ShieldAlert, BadgeCheck, Pencil, Film, Image, Sparkles, User, Share2, Upload, Paperclip, Palette } from "lucide-react";
 import { EventProject, UserProfile, DjAsset, ArtTask } from "../../types";
 import { collection, query, onSnapshot, addDoc, serverTimestamp, deleteDoc, doc, getDocs, limit, orderBy, updateDoc } from "firebase/firestore";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
@@ -20,6 +20,9 @@ import { getDriveAccessToken, uploadFileToGoogleDrive, getGoogleDriveFileId, get
 interface DjAssetsProps {
   event: EventProject;
   profile: UserProfile;
+  initialSelectedAssetId?: string | null;
+  onClearInitialSelected?: () => void;
+  onNavigateToArtTask?: (djAssetId: string) => void;
 }
 
 function getFriendlyFileName(url: string | undefined): string {
@@ -80,7 +83,7 @@ async function loadStoredAudioAsBlob(url: string | undefined, setBlobUrl: (u: st
   }
 }
 
-export function DjAssets({ event, profile }: DjAssetsProps) {
+export function DjAssets({ event, profile, initialSelectedAssetId, onClearInitialSelected, onNavigateToArtTask }: DjAssetsProps) {
   const [assets, setAssets] = useState<DjAsset[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -385,6 +388,16 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
     });
     return () => unsubscribe();
   }, [event.id]);
+
+  useEffect(() => {
+    if (initialSelectedAssetId && assets.length > 0) {
+      const asset = assets.find(a => a.id === initialSelectedAssetId);
+      if (asset) {
+        handleOpenView(asset);
+        onClearInitialSelected?.();
+      }
+    }
+  }, [initialSelectedAssetId, assets, onClearInitialSelected]);
 
   const handleOpenEdit = (asset: DjAsset) => {
     setEditingId(asset.id);
@@ -2272,10 +2285,23 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                 type="button"
                 variant="outline"
                 onClick={() => setViewOpen(false)}
-                className="w-full sm:w-1/3 rounded-2xl h-12 border-white/10 hover:bg-white/5 font-black text-slate-300 uppercase tracking-widest text-xs"
+                className="w-full sm:flex-1 rounded-2xl h-12 border-white/10 hover:bg-white/5 font-black text-slate-300 uppercase tracking-widest text-xs"
               >
                 Fechar
               </Button>
+              {onNavigateToArtTask && selectedViewAsset && (
+                <Button
+                  type="button"
+                  onClick={() => {
+                    setViewOpen(false);
+                    onNavigateToArtTask(selectedViewAsset.id);
+                  }}
+                  className="w-full sm:flex-1 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-505 text-white border border-purple-500/20 rounded-2xl h-12 font-black uppercase tracking-widest text-xs flex items-center justify-center gap-1.5 transition-all shadow-[0_0_20px_rgba(147,51,234,0.3)]"
+                >
+                  <Palette className="w-3.5 h-3.5" />
+                  Ver em Artes
+                </Button>
+              )}
               <Button
                 onClick={() => {
                   setViewOpen(false);
@@ -2283,7 +2309,7 @@ export function DjAssets({ event, profile }: DjAssetsProps) {
                     handleOpenEdit(selectedViewAsset);
                   }
                 }}
-                className="w-full sm:w-2/3 bg-pink-500 hover:bg-pink-600 text-white rounded-2xl h-12 font-black shadow-[0_0_20px_rgba(236,72,153,0.3)] uppercase tracking-widest text-xs flex items-center justify-center gap-2"
+                className="w-full sm:flex-1 bg-pink-500 hover:bg-pink-600 text-white rounded-2xl h-12 font-black shadow-[0_0_20px_rgba(236,72,153,0.3)] uppercase tracking-widest text-xs flex items-center justify-center gap-2"
               >
                 <Pencil className="w-4 h-4" />
                 Editar Informações

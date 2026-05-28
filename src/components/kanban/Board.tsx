@@ -3,8 +3,8 @@ import { createPortal } from 'react-dom';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Plus, GripVertical, MessageSquare, Clock, Calendar, Palette, MoreHorizontal, User, ChevronLeft, ChevronRight, Music, PartyPopper, Star, AlertTriangle, List, Layout, GanttChart, Pencil, Trash2, Move, ArrowRight, RotateCcw, History, Check, X } from "lucide-react";
-import { EventProject, UserProfile, ArtTask, OperationType, PendingChange } from "../../types";
+import { Plus, GripVertical, MessageSquare, Clock, Calendar, Palette, MoreHorizontal, User, ChevronLeft, ChevronRight, Music, PartyPopper, Star, AlertTriangle, List, Layout, GanttChart, Pencil, Trash2, Move, ArrowRight, RotateCcw, History, Check, X, Disc, ExternalLink, ShieldAlert, Film, Sparkles, Share2, Paperclip, Image as ImageIcon, Loader2 } from "lucide-react";
+import { EventProject, UserProfile, ArtTask, OperationType, PendingChange, DjAsset } from "../../types";
 import { collection, query, onSnapshot, addDoc, updateDoc, doc, serverTimestamp, deleteDoc, orderBy, setDoc } from "firebase/firestore";
 import { db, handleFirestoreError } from "../../firebase";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
@@ -22,6 +22,9 @@ import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea
 interface KanbanBoardProps {
   event: EventProject;
   profile: UserProfile;
+  onNavigateToDjAssets?: (djAssetId: string) => void;
+  initialSelectedDjId?: string | null;
+  onClearInitialSelectedDj?: () => void;
 }
 
 type ColumnId = 'todo' | 'production' | 'review' | 'delivered' | 'post' | 'finished';
@@ -35,7 +38,7 @@ const COLUMNS: { id: ColumnId; title: string; color: string; textColor: string }
   { id: 'finished', title: 'Finalizado', color: 'bg-emerald-500', textColor: 'text-emerald-500' },
 ];
 
-export function KanbanBoard({ event, profile }: KanbanBoardProps) {
+export function KanbanBoard({ event, profile, onNavigateToDjAssets, initialSelectedDjId, onClearInitialSelectedDj }: KanbanBoardProps) {
   const [viewMode, setViewMode] = useState<'kanban' | 'calendar' | 'timeline' | 'list'>(() => {
     const saved = localStorage.getItem('artsViewMode');
     if (saved && (saved === 'kanban' || saved === 'calendar')) {
@@ -77,6 +80,78 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
   const [selectedArt, setSelectedArt] = useState<ArtTask | null>(null);
   const [editArt, setEditArt] = useState<Partial<ArtTask> | null>(null);
 
+  const [djAssets, setDjAssets] = useState<DjAsset[]>([]);
+  const [selectedDjAssetForView, setSelectedDjAssetForView] = useState<DjAsset | null>(null);
+  const [isDjViewOpen, setIsDjViewOpen] = useState(false);
+
+  useEffect(() => {
+    const q = query(collection(db, 'events', event.id, 'dj_assets'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const fetched = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as DjAsset));
+      setDjAssets(fetched);
+    }, (error) => {
+      console.error("Erro ao escutar dj_assets em Board:", error);
+    });
+    return () => unsubscribe();
+  }, [event.id]);
+
+  const findConnectedDjAsset = (art: ArtTask): DjAsset | undefined => {
+    if (!art) return undefined;
+    const sourceId = (art as any).sourceAssetId;
+    if (sourceId) {
+      const found = djAssets.find(d => d.id === sourceId);
+      if (found) return found;
+    }
+    const title = art.title || '';
+    const djNameClean = title.replace(/^Arte DJ:\s*/i, '').trim().toLowerCase();
+    if (djNameClean) {
+      const foundByName = djAssets.find(d => d.name?.trim().toLowerCase() === djNameClean);
+      if (foundByName) return foundByName;
+
+      const foundByPartial = djAssets.find(d => {
+        const name = d.name?.trim().toLowerCase() || '';
+        return name && (djNameClean.includes(name) || name.includes(djNameClean));
+      });
+      if (foundByPartial) return foundByPartial;
+    }
+    return undefined;
+  };
+
+  const handleCardClick = (art: ArtTask) => {
+    if (art.category === 'dj') {
+      const connected = findConnectedDjAsset(art);
+      if (connected) {
+        setSelectedDjAssetForView(connected);
+        setIsDjViewOpen(true);
+        return;
+      }
+    }
+    setSelectedArt(art);
+  };
+
+  const [isEditingDjAsset, setIsEditingDjAsset] = useState(false);
+  const [editDjForm, setEditDjForm] = useState<Partial<DjAsset>>({});
+
+  const handleStartEditDj = () => {
+    if (!selectedDjAssetForView) return;
+    setEditDjForm({ ...selectedDjAssetForView });
+    setIsEditingDjAsset(true);
+  };
+
+  const handleSaveDjAsset = async (updatedData: Partial<DjAsset>) => {
+    if (!selectedDjAssetForView) return;
+    try {
+      const assetRef = doc(db, 'events', event.id, 'dj_assets', selectedDjAssetForView.id);
+      await updateDoc(assetRef, updatedData);
+      toast.success("Informações do DJ atualizadas com sucesso!");
+      setIsEditingDjAsset(false);
+      setSelectedDjAssetForView(prev => prev ? { ...prev, ...updatedData } : null);
+    } catch (error) {
+      console.error("Erro ao atualizar DJ asset:", error);
+      toast.error("Erro ao salvar as alterações do DJ.");
+    }
+  };
+
   const [timelineDetail, setTimelineDetail] = useState<'urgent' | 'medium' | 'low' | 'completed' | null>(null);
   const [pendingChanges, setPendingChanges] = useState<PendingChange[]>([]);
 
@@ -117,6 +192,34 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
     });
     return () => unsubscribe();
   }, [event.id]);
+
+  useEffect(() => {
+    if (initialSelectedDjId && arts.length > 0 && djAssets.length > 0) {
+      const djAsset = djAssets.find(d => d.id === initialSelectedDjId);
+      if (djAsset) {
+        let foundArt = arts.find((art: any) => art.sourceAssetId === initialSelectedDjId);
+        
+        if (!foundArt) {
+          const djNameClean = djAsset.name?.trim().toLowerCase();
+          if (djNameClean) {
+            foundArt = arts.find(art => {
+              const title = art.title || '';
+              const artNameClean = title.replace(/^Arte DJ:\s*/i, '').trim().toLowerCase();
+              return artNameClean === djNameClean || artNameClean.includes(djNameClean) || djNameClean.includes(artNameClean);
+            });
+          }
+        }
+        
+        if (foundArt) {
+          setSelectedArt(foundArt);
+          onClearInitialSelectedDj?.();
+        } else {
+          toast.info(`Nenhum card de arte correspondente para ${djAsset.name} foi encontrado.`);
+          onClearInitialSelectedDj?.();
+        }
+      }
+    }
+  }, [initialSelectedDjId, arts, djAssets, onClearInitialSelectedDj]);
 
   const visibleArts = useMemo(() => {
     // 1. If designer/admin, we only show approved/original database arts.
@@ -1280,7 +1383,7 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
                                     }}
                                   >
                                     <Card 
-                                      onClick={() => !snapshot.isDragging && setSelectedArt(art)}
+                                      onClick={() => !snapshot.isDragging && handleCardClick(art)}
                                       className={cn(
                                         "rounded-xl border-white/5 shadow-2xl hover:bg-white/10 transition-all duration-300 group relative overflow-hidden backdrop-blur-md cursor-pointer",
                                         snapshot.isDragging ? "bg-slate-800 border-white/20" : "bg-slate-900/60 border",
@@ -1399,7 +1502,7 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
                     "group relative bg-white/[0.02] hover:bg-white/5 border border-white/5 rounded-2xl p-4 md:p-6 transition-all hover:scale-[1.01] hover:shadow-2xl overflow-hidden cursor-pointer",
                     art.isPendingDelete && "opacity-50 border-rose-500/30"
                   )}
-                  onClick={() => setSelectedArt(art)}
+                  onClick={() => handleCardClick(art)}
                 >
                   <div className={`absolute top-0 left-0 w-1.5 h-full ${getPriorityColor(art.priority)}`} />
                   
@@ -1604,7 +1707,7 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
                     {dayTasks.map((task) => (
                       <div 
                         key={task.id}
-                        onClick={() => setSelectedArt(task)}
+                        onClick={() => handleCardClick(task)}
                         className={cn(
                           "p-5 rounded-2xl border bg-white/[0.02] border-white/5 hover:border-white/10 hover:bg-white/[0.04] transition-all cursor-pointer flex items-center justify-between gap-4"
                         )}
@@ -1706,7 +1809,7 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
                                       ref={provided.innerRef}
                                       {...provided.draggableProps}
                                       {...provided.dragHandleProps}
-                                      onClick={() => !snapshot.isDragging && setSelectedArt(task)}
+                                      onClick={() => !snapshot.isDragging && handleCardClick(task)}
                                       className={cn(
                                         "w-full text-left p-2 rounded-lg text-[9px] font-black tracking-tight border border-white/5 transition-all flex items-center justify-between gap-1 min-w-0",
                                         task.priority === 'high' ? "bg-red-500/20 text-red-400 border-red-500/20" :
@@ -1874,7 +1977,7 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
                           {artsForDate.map(art => (
                             <div
                               key={art.id}
-                              onClick={() => setSelectedArt(art)}
+                              onClick={() => handleCardClick(art)}
                               className="group/card p-5 rounded-[2rem] bg-white/[0.02] border border-white/5 hover:bg-white/[0.04] hover:border-white/10 transition-all duration-300 cursor-pointer flex flex-col justify-between min-h-[120px] shadow-lg relative overflow-hidden"
                             >
                               <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${getPriorityColor(art.priority)}`} />
@@ -2882,6 +2985,489 @@ export function KanbanBoard({ event, profile }: KanbanBoardProps) {
               </div>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* DJ Asset Presskit Modal */}
+      <Dialog open={isDjViewOpen} onOpenChange={(open) => {
+        setIsDjViewOpen(open);
+        if (!open) {
+          setIsEditingDjAsset(false);
+          setSelectedDjAssetForView(null);
+        }
+      }}>
+        <DialogContent className="rounded-[2rem] sm:max-w-[700px] w-[95vw] bg-slate-950/90 backdrop-blur-xl border border-white/10 text-slate-100 p-4 sm:p-8 max-h-[92vh] overflow-hidden flex flex-col shadow-2xl z-[99999]">
+          {!isEditingDjAsset ? (
+            // --- VIEW MODE ---
+            <>
+              <DialogHeader className="shrink-0 pb-4 border-b border-white/5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-10 h-10 bg-gradient-to-tr from-purple-600 to-indigo-600 rounded-full flex items-center justify-center shadow-lg">
+                      <Disc className="w-5 h-5 text-white animate-spin" style={{ animationDuration: '6s' }} />
+                    </div>
+                    <div className="text-left">
+                      <DialogTitle className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                        {selectedDjAssetForView?.name}
+                      </DialogTitle>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                        Ficha de Informações do DJ / Atração
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={cn(
+                      "text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full",
+                      selectedDjAssetForView?.presskitStatus === 'completed' ? "bg-emerald-500/20 text-emerald-400" : "bg-white/10 text-slate-400"
+                    )}>
+                      {selectedDjAssetForView?.presskitStatus === 'completed' ? 'Preenchido' : 'Pendente'}
+                    </span>
+                  </div>
+                </div>
+              </DialogHeader>
+
+              <div className="flex-1 overflow-y-auto py-6 space-y-6 pr-1 custom-scrollbar">
+                {/* Link de Preenchimento Exclusivo para o DJ */}
+                {selectedDjAssetForView && (
+                  <div className="bg-purple-500/10 border border-purple-500/20 p-4 rounded-xl sm:rounded-2xl flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
+                    <div className="space-y-0.5 text-left">
+                      <p className="text-[10px] uppercase font-black tracking-widest text-purple-400 font-extrabold">
+                        Link de Preenchimento Exclusivo para o DJ
+                      </p>
+                      <p className="text-[11px] text-slate-400 leading-relaxed">
+                        Envie este link para o próprio DJ preencher suas mídias diretamente, sem precisar de login ou visualizar outras partes do painel!
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        const shareUrl = `${window.location.origin}${window.location.pathname}?djShare=${event.id}_${selectedDjAssetForView.id}`;
+                        navigator.clipboard.writeText(shareUrl);
+                        toast.success("Link exclusivo copiado com sucesso!");
+                      }}
+                      className="rounded-xl h-11 sm:h-10 px-4 bg-purple-50 hover:bg-purple-600 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5 border-none shrink-0"
+                    >
+                      <Share2 className="w-3.5 h-3.5" />
+                      Copiar Link
+                    </Button>
+                  </div>
+                )}
+
+                {/* Row 1: Status Details */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-left">
+                  <div className="bg-white/[0.02] border border-white/5 p-4 rounded-2xl space-y-1">
+                    <p className="text-[9px] uppercase font-black tracking-widest text-slate-500">Prioridade da Arte</p>
+                    <p className={cn(
+                      "text-xs font-black uppercase tracking-wider",
+                      selectedDjAssetForView?.priority === 'urgent' ? "text-rose-400" :
+                      selectedDjAssetForView?.priority === 'medium' ? "text-amber-400" :
+                      "text-emerald-400"
+                    )}>
+                      {selectedDjAssetForView?.priority === 'low' ? 'Baixa' : selectedDjAssetForView?.priority === 'medium' ? 'Média' : 'Urgente'}
+                    </p>
+                  </div>
+
+                  <div className="bg-white/[0.02] border border-white/5 p-4 rounded-2xl space-y-1">
+                    <p className="text-[9px] uppercase font-black tracking-widest text-slate-500">Data de Entrega da Arte</p>
+                    <p className="text-xs font-black text-white tracking-wider flex items-center gap-1.5">
+                      <Calendar className="w-3.5 h-3.5 text-pink-400" />
+                      {selectedDjAssetForView?.artDeadline || 'Não definida'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Presskit Link */}
+                <div className="bg-white/[0.02] border border-white/5 p-5 rounded-2xl space-y-3 text-left">
+                  <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                    Link do Presskit & Fotos
+                  </p>
+                  {selectedDjAssetForView?.presskitUrl ? (
+                    <div className="flex items-center justify-between p-3.5 bg-white/5 rounded-2xl border border-white/10">
+                      <span className="text-xs font-bold text-slate-200 truncate pr-4">
+                        {selectedDjAssetForView.presskitType === 'email' ? `📨 E-mail: ${selectedDjAssetForView.presskitUrl}` : selectedDjAssetForView.presskitUrl}
+                      </span>
+                      <div className="flex gap-2 shrink-0">
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => {
+                            navigator.clipboard.writeText(selectedDjAssetForView.presskitUrl || '');
+                            toast.success("Copiado com sucesso!");
+                          }}
+                          className="h-8 rounded-xl text-[10px] uppercase font-black tracking-widest"
+                        >
+                          Copiar
+                        </Button>
+                        {selectedDjAssetForView.presskitType === 'email' ? (
+                          selectedDjAssetForView.presskitUrl.includes('@') ? (
+                            <a
+                              href={`mailto:${selectedDjAssetForView.presskitUrl}`}
+                              className="inline-flex items-center justify-center h-8 rounded-xl text-[10px] uppercase font-black tracking-widest bg-purple-500 text-white hover:bg-purple-600 px-3 transition-colors"
+                            >
+                              Enviar E-mail
+                            </a>
+                          ) : null
+                        ) : (
+                          <a
+                            href={selectedDjAssetForView.presskitUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center justify-center h-8 rounded-xl text-[10px] uppercase font-black tracking-widest bg-pink-500 text-white hover:bg-pink-600 px-3 transition-colors"
+                          >
+                            Acessar
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-rose-400/80 font-bold italic bg-rose-500/5 p-4 rounded-2xl border border-rose-500/10">
+                      Nenhum link fornecido até o momento.
+                    </p>
+                  )}
+                </div>
+
+                {/* Logos Mandatórios */}
+                {selectedDjAssetForView?.hasMandatoryLogo ? (
+                  <div className="bg-white/[0.02] border border-white/5 p-5 rounded-2xl space-y-4 text-left">
+                    <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest flex items-center gap-1.5">
+                      <ShieldAlert className="w-3.5 h-3.5 text-amber-500" />
+                      Logos Obrigatórios para Materiais de Divulgação
+                    </p>
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {/* Agencies */}
+                      <div className="space-y-2">
+                        <p className="text-[9px] uppercase font-black tracking-widest text-amber-400/80">Agência(s)</p>
+                        {selectedDjAssetForView.agencies && selectedDjAssetForView.agencies.length > 0 ? (
+                          <div className="space-y-1.5">
+                            {selectedDjAssetForView.agencies.map((agency, i) => (
+                              <div key={i} className="text-xs flex items-center justify-between font-bold text-slate-200 bg-white/5 border border-white/5 rounded-xl px-3 py-2">
+                                <span className="truncate">{agency.name || '-'}</span>
+                                {agency.link && (
+                                  <a
+                                    href={agency.link}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-[10px] text-pink-400 hover:text-pink-300 transition-colors"
+                                  >
+                                    Logo
+                                  </a>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-slate-500 italic">Nenhuma agência adicionada.</p>
+                        )}
+                      </div>
+
+                      {/* Labels */}
+                      <div className="space-y-2">
+                        <p className="text-[9px] uppercase font-black tracking-widest text-amber-400/80">Gravadora(s)</p>
+                        {selectedDjAssetForView.labels && selectedDjAssetForView.labels.length > 0 && selectedDjAssetForView.labels.some(l => l.name?.trim()) ? (
+                          <div className="space-y-1.5">
+                            {selectedDjAssetForView.labels.map((label, i) => label.name && (
+                              <div key={i} className="text-xs flex items-center justify-between font-bold text-slate-200 bg-white/5 border border-white/5 rounded-xl px-3 py-2">
+                                <span className="truncate">{label.name}</span>
+                                {label.link && (
+                                  <a
+                                    href={label.link}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-[10px] text-pink-400 hover:text-pink-300 transition-colors"
+                                  >
+                                    Logo
+                                  </a>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-slate-500 italic">Nenhuma gravadora cadastrada.</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-white/[0.02] border border-white/5 p-4 rounded-2xl text-left">
+                    <p className="text-xs text-slate-500 font-bold italic">Nenhum logo obrigatório exigido.</p>
+                  </div>
+                )}
+
+                {/* Material Visual */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-left">
+                  <div className="bg-white/[0.02] border border-white/5 p-5 rounded-2xl space-y-3">
+                    <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest flex items-center gap-1.5">
+                      <ImageIcon className="w-3.5 h-3.5 text-blue-400" />
+                      Foto p/ Flyer
+                    </p>
+                    {selectedDjAssetForView?.flyerPhoto ? (
+                      <div className="bg-white/5 border border-white/10 p-3 rounded-xl flex flex-col justify-between h-[84px]">
+                        <p className="text-xs font-bold text-slate-200 line-clamp-2 leading-relaxed">{selectedDjAssetForView.flyerPhoto}</p>
+                        {selectedDjAssetForView.flyerPhoto.startsWith('http') && (
+                          <a
+                            href={selectedDjAssetForView.flyerPhoto}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[10px] text-blue-400 hover:text-blue-300 flex items-center gap-0.5 font-bold mt-1"
+                          >
+                            Acessar link <ExternalLink className="w-2.5 h-2.5" />
+                          </a>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-slate-600 font-bold italic text-center py-4 bg-white/[0.01] rounded-xl border border-dashed border-white/5">
+                        Pendente/Não enviada
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="bg-white/[0.02] border border-white/5 p-5 rounded-2xl space-y-3">
+                    <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest flex items-center gap-1.5">
+                      <Film className="w-3.5 h-3.5 text-teal-400" />
+                      Vídeo p/ Motion
+                    </p>
+                    {selectedDjAssetForView?.animationVideo ? (
+                      <div className="bg-white/5 border border-white/10 p-3 rounded-xl flex flex-col justify-between h-[84px]">
+                        <p className="text-xs font-bold text-slate-200 line-clamp-2 leading-relaxed">{selectedDjAssetForView.animationVideo}</p>
+                        {selectedDjAssetForView.animationVideo.startsWith('http') && (
+                          <a
+                            href={selectedDjAssetForView.animationVideo}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[10px] text-teal-400 hover:text-teal-300 flex items-center gap-0.5 font-bold mt-1"
+                          >
+                            Acessar link <ExternalLink className="w-2.5 h-2.5" />
+                          </a>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-slate-600 font-bold italic text-center py-4 bg-white/[0.01] rounded-xl border border-dashed border-white/5">
+                        Pendente/Não enviado
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Trilha de Entrada */}
+                <div className="bg-white/[0.02] border border-white/5 p-5 rounded-2xl space-y-3 text-left">
+                  <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest flex items-center gap-1.5">
+                    <Music className="w-3.5 h-3.5 text-pink-400" />
+                    Música de Entrada (Track)
+                  </p>
+                  {selectedDjAssetForView?.musicName ? (
+                    <div className="p-4 bg-gradient-to-br from-indigo-500/10 to-purple-500/10 rounded-[1.5rem] border border-white/5 flex items-center justify-between">
+                      <div className="space-y-1 text-left">
+                        <p className="text-sm font-black text-white">{selectedDjAssetForView.musicName}</p>
+                        <div className="flex items-center space-x-2 text-slate-500">
+                          <Clock className="w-3 h-3 text-purple-400 animate-pulse" />
+                          <span className="text-[10px] font-black uppercase">{selectedDjAssetForView.musicDuration || "Duração não definida"}</span>
+                        </div>
+                      </div>
+                      {selectedDjAssetForView.musicUrl && (
+                        <a
+                          href={selectedDjAssetForView.musicUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="rounded-full bg-white/10 p-2.5 hover:bg-pink-500 hover:text-white transition-all shadow-lg text-slate-300"
+                        >
+                          <Music className="w-4 h-4" />
+                        </a>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-500 font-bold italic text-center py-4 bg-white/[0.01] rounded-xl border border-dashed border-white/5">
+                      Nenhuma trilha fornecida.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <DialogFooter className="pt-4 border-t border-white/5 flex flex-col sm:flex-row gap-2 sm:gap-3 shrink-0">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsDjViewOpen(false)}
+                  className="w-full sm:flex-1 rounded-2xl h-12 border-white/10 hover:bg-white/5 font-black text-slate-300 uppercase tracking-widest text-xs"
+                >
+                  Fechar
+                </Button>
+                {onNavigateToDjAssets && selectedDjAssetForView && (
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      setIsDjViewOpen(false);
+                      onNavigateToDjAssets(selectedDjAssetForView.id);
+                    }}
+                    className="w-full sm:flex-1 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-505 text-white border border-purple-500/20 rounded-2xl h-12 font-black uppercase tracking-widest text-xs flex items-center justify-center gap-1.5 transition-all shadow-[0_0_20px_rgba(147,51,234,0.3)]"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    Ver em DJs
+                  </Button>
+                )}
+                <Button
+                  onClick={handleStartEditDj}
+                  className="w-full sm:flex-1 bg-pink-500 hover:bg-pink-600 text-white rounded-2xl h-12 font-black shadow-[0_0_20px_rgba(236,72,153,0.3)] uppercase tracking-widest text-xs flex items-center justify-center gap-2"
+                >
+                  <Pencil className="w-4 h-4" />
+                  Editar Informações
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            // --- EDIT MODE ---
+            <>
+              <DialogHeader className="shrink-0 pb-4 border-b border-white/5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-10 h-10 bg-gradient-to-tr from-pink-500 to-rose-500 rounded-full flex items-center justify-center shadow-lg">
+                      <Pencil className="w-5 h-5 text-white" />
+                    </div>
+                    <div className="text-left">
+                      <DialogTitle className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                        Editar DJ: {selectedDjAssetForView?.name}
+                      </DialogTitle>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                        Atualizar Ficha de Informações do DJ
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </DialogHeader>
+
+              <div className="flex-1 overflow-y-auto py-6 space-y-6 pr-1 custom-scrollbar text-left">
+                {/* Nome do DJ */}
+                <div className="space-y-2">
+                  <Label className="text-xs font-black uppercase tracking-widest text-slate-400">Nome do DJ / Atração</Label>
+                  <Input
+                    value={editDjForm.name || ''}
+                    onChange={(e) => setEditDjForm(prev => ({ ...prev, name: e.target.value }))}
+                    className="rounded-xl border-white/10 bg-white/5 text-white h-11 text-xs"
+                  />
+                </div>
+
+                {/* Prioridade e Data */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-xs font-black uppercase tracking-widest text-slate-400">Prioridade da Arte</Label>
+                    <Select
+                      value={editDjForm.priority || 'medium'}
+                      onValueChange={(val: any) => setEditDjForm(prev => ({ ...prev, priority: val }))}
+                    >
+                      <SelectTrigger className="rounded-xl border-white/10 bg-white/5 text-white h-11 text-xs">
+                        <SelectValue placeholder="Prioridade" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-slate-900 border-white/10 text-white">
+                        <SelectItem value="low">Baixa</SelectItem>
+                        <SelectItem value="medium">Média</SelectItem>
+                        <SelectItem value="urgent">Urgente</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-xs font-black uppercase tracking-widest text-slate-400">Data de Entrega da Arte</Label>
+                    <Input
+                      type="date"
+                      value={editDjForm.artDeadline || ''}
+                      onChange={(e) => setEditDjForm(prev => ({ ...prev, artDeadline: e.target.value }))}
+                      className="rounded-xl border-white/10 bg-white/5 text-white h-11 text-xs"
+                    />
+                  </div>
+                </div>
+
+                {/* Link do Presskit */}
+                <div className="space-y-2">
+                  <Label className="text-xs font-black uppercase tracking-widest text-slate-400">Link do Presskit & Fotos</Label>
+                  <Input
+                    value={editDjForm.presskitUrl || ''}
+                    onChange={(e) => setEditDjForm(prev => ({ ...prev, presskitUrl: e.target.value }))}
+                    className="rounded-xl border-white/10 bg-white/5 text-white h-11 text-xs"
+                    placeholder="https://drive.google.com/..."
+                  />
+                </div>
+
+                {/* Foto p/ Flyer e Vídeo */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-xs font-black uppercase tracking-widest text-slate-400">Link Foto p/ Flyer</Label>
+                    <Input
+                      value={editDjForm.flyerPhoto || ''}
+                      onChange={(e) => setEditDjForm(prev => ({ ...prev, flyerPhoto: e.target.value }))}
+                      className="rounded-xl border-white/10 bg-white/5 text-white h-11 text-xs"
+                      placeholder="URL ou Nome da Imagem"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-xs font-black uppercase tracking-widest text-slate-400">Link Vídeo p/ Motion</Label>
+                    <Input
+                      value={editDjForm.animationVideo || ''}
+                      onChange={(e) => setEditDjForm(prev => ({ ...prev, animationVideo: e.target.value }))}
+                      className="rounded-xl border-white/10 bg-white/5 text-white h-11 text-xs"
+                      placeholder="Link do vídeo ou instrução"
+                    />
+                  </div>
+                </div>
+
+                {/* Música de Entrada Info */}
+                <div className="bg-white/5 border border-white/5 p-4 rounded-2xl space-y-4">
+                  <p className="text-[10px] text-pink-400 font-black uppercase tracking-widest">Trilha de Entrada (Áudio)</p>
+                  
+                  <div className="space-y-2">
+                    <Label className="text-xs font-black uppercase tracking-widest text-slate-400">Nome da Música</Label>
+                    <Input
+                      value={editDjForm.musicName || ''}
+                      onChange={(e) => setEditDjForm(prev => ({ ...prev, musicName: e.target.value }))}
+                      className="rounded-xl border-white/10 bg-white/5 text-white h-11 text-xs"
+                      placeholder="Ex: Alok - Hear Me Now"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-xs font-black uppercase tracking-widest text-slate-400">Link de Download / Player</Label>
+                      <Input
+                        value={editDjForm.musicUrl || ''}
+                        onChange={(e) => setEditDjForm(prev => ({ ...prev, musicUrl: e.target.value }))}
+                        className="rounded-xl border-white/10 bg-white/5 text-white h-11 text-xs"
+                        placeholder="https://gdrive.com/..."
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-xs font-black uppercase tracking-widest text-slate-400">Duração / Drop Marcado</Label>
+                      <Input
+                        value={editDjForm.musicDuration || ''}
+                        onChange={(e) => setEditDjForm(prev => ({ ...prev, musicDuration: e.target.value }))}
+                        className="rounded-xl border-white/10 bg-white/5 text-white h-11 text-xs"
+                        placeholder="Ex: 01:15 - 01:45"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <DialogFooter className="pt-4 border-t border-white/5 flex flex-col sm:flex-row gap-2 sm:gap-3 shrink-0">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsEditingDjAsset(false)}
+                  className="w-full sm:w-1/3 rounded-2xl h-12 border-white/10 hover:bg-white/5 font-black text-slate-300 uppercase tracking-widest text-xs"
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={() => handleSaveDjAsset(editDjForm)}
+                  className="w-full sm:w-2/3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl h-12 font-black shadow-[0_0_20px_rgba(16,185,129,0.3)] uppercase tracking-widest text-xs flex items-center justify-center gap-2"
+                >
+                  <Check className="w-4 h-4" />
+                  Salvar Alterações
+                </Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </DragDropContext>

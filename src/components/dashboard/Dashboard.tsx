@@ -29,6 +29,8 @@ export function Dashboard({ profile }: DashboardProps) {
     return localStorage.getItem('selectedEventId');
   });
   const [loading, setLoading] = useState(true);
+  const [highlightedDjAssetId, setHighlightedDjAssetId] = useState<string | null>(null);
+  const [highlightedArtDjId, setHighlightedArtDjId] = useState<string | null>(null);
 
   useEffect(() => {
     const isAdmin = profile.email === 'beysarts@gmail.com';
@@ -127,8 +129,30 @@ export function Dashboard({ profile }: DashboardProps) {
           {activeEvent && activeView !== 'profile' && activeView !== 'about' && activeView !== 'admin' && (
             <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
               {activeView === 'overview' && <Overview event={activeEvent} profile={profile} />}
-              {activeView === 'arts' && <KanbanBoard event={activeEvent} profile={profile} />}
-               {activeView === 'dj' && <DjAssets event={activeEvent} profile={profile} />}
+              {activeView === 'arts' && (
+                <KanbanBoard 
+                  event={activeEvent} 
+                  profile={profile} 
+                  onNavigateToDjAssets={(id) => {
+                    setHighlightedDjAssetId(id);
+                    setActiveView('dj');
+                  }} 
+                  initialSelectedDjId={highlightedArtDjId}
+                  onClearInitialSelectedDj={() => setHighlightedArtDjId(null)}
+                />
+              )}
+              {activeView === 'dj' && (
+                <DjAssets 
+                  event={activeEvent} 
+                  profile={profile} 
+                  initialSelectedAssetId={highlightedDjAssetId}
+                  onClearInitialSelected={() => setHighlightedDjAssetId(null)}
+                  onNavigateToArtTask={(id) => {
+                    setHighlightedArtDjId(id);
+                    setActiveView('arts');
+                  }}
+                />
+              )}
               {activeView === 'docs' && <Corregedoria event={activeEvent} profile={profile} />}
               {activeView === 'files' && <Files event={activeEvent} profile={profile} />}
               {activeView === 'payments' && <Payments event={activeEvent} profile={profile} />}
