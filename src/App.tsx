@@ -39,10 +39,16 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setUser(user);
       if (user) {
-        const userDoc = await getDoc(doc(db, 'users', user.uid));
-        if (userDoc.exists()) {
-          setProfile(userDoc.data() as UserProfile);
-        } else {
+        try {
+          const userDoc = await getDoc(doc(db, 'users', user.uid));
+          if (userDoc.exists()) {
+            setProfile(userDoc.data() as UserProfile);
+          } else {
+            setProfile(null);
+          }
+        } catch (err: any) {
+          console.error("Erro ao carregar perfil do Firestore:", err);
+          toast.error("Conectado à conta, mas falha ao sincronizar com o banco de dados Firestore. Verifique suas regras de segurança ou id do banco.");
           setProfile(null);
         }
       } else {
