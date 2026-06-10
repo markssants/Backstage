@@ -1316,7 +1316,7 @@ export function KanbanBoard({ event, profile, onNavigateToDjAssets, initialSelec
           className="flex overflow-x-auto pb-8 gap-6 min-h-[600px] custom-scrollbar snap-x px-2"
         >
           {COLUMNS.map(column => (
-          <div key={column.id} className="flex flex-col space-y-3 rounded-3xl bg-white/5 p-4 border border-white/5 backdrop-blur-md w-[280px] shrink-0 shadow-2xl snap-center transition-transform hover:scale-[1.01]">
+          <div key={column.id} className="flex flex-col space-y-3 rounded-3xl bg-white/5 p-4 border border-white/5 backdrop-blur-md w-[280px] shrink-0 shadow-2xl snap-center">
             <div className="flex items-center justify-between px-1 mb-6">
               <div className="flex items-center space-x-3">
                 <div className={cn("w-2 h-2 rounded-full shadow-[0_0_10px_currentColor]", column.color)} />
@@ -1338,13 +1338,13 @@ export function KanbanBoard({ event, profile, onNavigateToDjAssets, initialSelec
               </div>
             </div>
 
-            <div className="flex-1 space-y-3">
+            <div className="flex-1 flex flex-col">
               <Droppable droppableId={column.id}>
                 {(provided) => (
                   <div 
                     {...provided.droppableProps}
                     ref={provided.innerRef}
-                    className="flex-1 space-y-3 min-h-[100px]"
+                    className="flex-1 flex flex-col space-y-3 min-h-[450px] pb-32"
                   >
                     <AnimatePresence mode="popLayout">
                       {filteredArts.filter(a => a.status === column.id).map((art, index) => {
