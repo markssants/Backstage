@@ -29,6 +29,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
 
   const [loginLoading, setLoginLoading] = useState(false);
+  const [roleSaving, setRoleSaving] = useState(false);
 
   useEffect(() => {
     if (!auth || typeof auth.onIdTokenChanged !== 'function') {
@@ -87,21 +88,36 @@ export default function App() {
 
   const selectRole = async (role: UserRole) => {
     if (!user) return;
-    const newProfile: UserProfile = {
-      id: user.uid,
-      name: user.displayName || 'User',
-      email: user.email || '',
-      role,
-      createdAt: serverTimestamp(),
-    };
-    await setDoc(doc(db, 'users', user.uid), newProfile);
-    setProfile(newProfile);
+    setRoleSaving(true);
+    try {
+      const newProfile: UserProfile = {
+        id: user.uid,
+        name: user.displayName || 'User',
+        email: user.email || '',
+        role,
+        createdAt: serverTimestamp(),
+      };
+      await setDoc(doc(db, 'users', user.uid), newProfile);
+      setProfile(newProfile);
+      toast.success("Perfil registrado com sucesso!");
+    } catch (err: any) {
+      console.error("Erro ao salvar perfil no Firestore:", err);
+      toast.error(
+        `Erro de conexão / permissão no banco de dados Firestore: ${err.message || 'Desconhecido'}. ` +
+        "Verifique se as variáveis de ambiente e as Regras de Segurança do Firestore no console do Firebase estão corretas e publicadas."
+      );
+    } finally {
+      setRoleSaving(false);
+    }
   };
 
-  if (loading) {
+  if (loading || roleSaving) {
     return (
-      <div className="h-screen w-screen flex items-center justify-center bg-[#0a0518]">
+      <div className="h-screen w-screen flex flex-col items-center justify-center bg-[#0a0518] space-y-4">
         <Loader2 className="w-8 h-8 animate-spin text-pink-500" />
+        {roleSaving && (
+          <p className="text-slate-400 text-sm font-semibold animate-pulse">Sincronizando perfil com o Firebase...</p>
+        )}
       </div>
     );
   }

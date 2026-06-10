@@ -9,7 +9,7 @@ const firebaseConfig = {
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
   storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: "581432306990",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "581432306990",
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
@@ -21,7 +21,8 @@ if (!hasRequiredConfig) {
 }
 
 const app = hasRequiredConfig ? initializeApp(firebaseConfig) : ({} as any);
-const dbId = import.meta.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID;
+const rawDbId = import.meta.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID;
+const dbId = rawDbId && rawDbId !== "(default)" && rawDbId !== "default" ? rawDbId : undefined;
 
 export const db = hasRequiredConfig 
   ? (dbId ? getFirestore(app, dbId) : getFirestore(app)) 
