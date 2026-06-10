@@ -50,20 +50,335 @@ export function EventImporter({ profile, onEventImported, isMinimal = false }: E
     return value;
   };
 
-  const validateAndSetData = (jsonText: string) => {
-    try {
-      const data = JSON.parse(jsonText);
-      if (!data.eventInfo || !data.eventInfo.name) {
-        throw new Error("O arquivo JSON não é um backup de evento válido ou está corrompido.");
+  const validateAndSetData = (fileText: string) => {
+    const trimmed = fileText.trim();
+    const isHtml = trimmed.startsWith('<!') || trimmed.toLowerCase().includes('<html') || trimmed.toLowerCase().includes('</html>');
+
+    if (isHtml) {
+      try {
+        const domParser = new DOMParser();
+        const htmlDoc = domParser.parseFromString(fileText, 'text/html');
+
+        // Strategy A: Check for flawless embedded JSON
+        const embeddedScript = htmlDoc.getElementById('beys-arts-backup-data');
+        if (embeddedScript && embeddedScript.textContent) {
+          try {
+            const parsedData = JSON.parse(embeddedScript.textContent);
+            if (parsedData.eventInfo && parsedData.eventInfo.name) {
+              setImportedData(parsedData);
+              setErrorMessage(null);
+              toast.success("Relatório HTML com backup incorporado detectado!");
+              return;
+            }
+          } catch (e) {
+            console.warn("Found embedded backup script, but failed to parse JSON content.", e);
+          }
+        }
+
+        // Strategy B: Scrape legacy formatted HTML layout
+        const titleEl = htmlDoc.querySelector('header h1');
+        const name = titleEl ? titleEl.textContent?.trim() : '';
+        if (!name) {
+          throw new Error("Não foi possível encontrar o nome do evento no cabeçalho do relatório HTML.");
+        }
+
+        const logoImg = htmlDoc.querySelector('header img');
+        const logoUrl = logoImg ? logoImg.getAttribute('src') : `https://api.dicebear.com/7.x/initials/svg?seed=${name}`;
+
+        // Get location and metadata
+        const flexSpans = Array.from(htmlDoc.querySelectorAll('header span, header div span, header p span'));
+        
+        let city = '';
+        let location = '';
+        const locationSpan = flexSpans.find(el => el.textContent?.includes('📍'));
+        if (locationSpan) {
+          const text = locationSpan.textContent?.replace('📍', '').trim() || '';
+          const parts = text.split(/\s*-\s*/);
+          city = parts[0] ? parts[0].trim() : '';
+          location = parts[1] ? parts[1].trim() : '';
+          if (city === 'Sem Cidade') city = '';
+          if (location === 'Sem Local') location = '';
+        }
+
+        let eventDate = '';
+        const dateSpan = flexSpans.find(el => el.textContent?.includes('📅'));
+        if (dateSpan) {
+          eventDate = dateSpan.textContent?.replace('📅', '').trim() || '';
+          if (eventDate === 'Sem Data') eventDate = '';
+        }
+
+        let contractorName = '';
+        const contractorSpan = flexSpans.find(el => el.textContent?.includes('👤'));
+        if (contractorSpan) {
+          contractorName = contractorSpan.textContent?.replace('👤', '').replace(/Contratante:\s*/i, '').trim() || '';
+          if (contractorName === 'Não especificado') contractorName = '';
+        }
+
+        // Event Status
+        const statusBadge = htmlDoc.querySelector('header span.tracking-widest') || htmlDoc.querySelector('header span.text-purple-400');
+        const statusText = statusBadge ? statusBadge.textContent?.trim() || '' : '';
+        let status = 'planning';
+        if (statusText.toLowerCase().includes('andamento') || statusText.toLowerCase().includes('execu')) {
+          status = 'active';
+        } else if (statusText.toLowerCase().includes('concl')) {
+          status = 'completed';
+        }
+
+        // Arts parsing
+        const artsRows = htmlDoc.querySelectorAll('#arts-tab tbody tr');
+        const artsList: any[] = [];
+        artsRows.forEach((row, index) => {
+          const tds = row.querySelectorAll('td');
+          if (tds.length < 6) return;
+          const artTitle = tds[0].textContent?.trim() || '';
+          if (!artTitle || artTitle.includes('Nenhuma arte cadastrada')) return;
+
+          const artDesc = tds[1].getAttribute('title')?.trim() || tds[1].textContent?.trim() || '';
+          const categoryText = tds[2].querySelector('span')?.textContent?.trim() || '';
+          const priorityText = tds[3].querySelector('span')?.textContent?.trim() || '';
+          const deadlineText = tds[4].textContent?.trim() || '';
+          const statusText = tds[5].querySelector('span')?.textContent?.trim() || '';
+
+          let category = 'party';
+          const catLower = categoryText.toLowerCase();
+          if (catLower === 'dj') category = 'dj';
+          else if (catLower === 'branding') category = 'branding';
+
+          let priority = 'low';
+          const priLower = priorityText.toLowerCase();
+          if (priLower === 'urgente' || priLower === 'high' || priLower === 'alta') priority = 'high';
+          else if (priLower === 'média' || priLower === 'media' || priLower === 'medium') priority = 'medium';
+
+          let artStatus = 'todo';
+          const statLower = statusText.toLowerCase();
+          if (statLower.includes('produ')) artStatus = 'production';
+          else if (statLower.includes('revis')) artStatus = 'review';
+          else if (statLower.includes('entreg')) artStatus = 'delivered';
+          else if (statLower.includes('post')) artStatus = 'post';
+          else if (statLower.includes('finaliz') || statLower.includes('concl')) artStatus = 'finished';
+
+          let deadline: any = null;
+          if (deadlineText && deadlineText !== 'Sem Prazo' && deadlineText !== 'Sem prazo') {
+            const parts = deadlineText.split(' ');
+            if (parts[0]) {
+              const dParts = parts[0].split('/');
+              const tParts = (parts[1] || '00:00').split(':');
+              if (dParts.length === 3) {
+                const d = new Date(parseInt(dParts[2]), parseInt(dParts[1]) - 1, parseInt(dParts[0]), parseInt(tParts[0] || '00'), parseInt(tParts[1] || '00'));
+                if (!isNaN(d.getTime())) {
+                  deadline = d.toISOString();
+                }
+              }
+            }
+          }
+
+          artsList.push({
+            title: artTitle === 'Sem título' ? '' : artTitle,
+            description: artDesc === 'Sem descrição' ? '' : artDesc,
+            category,
+            priority,
+            deadline,
+            status: artStatus,
+            position: index * 1000
+          });
+        });
+
+        // DJs parsing
+        const djRows = htmlDoc.querySelectorAll('#djs-tab tbody tr');
+        const djsList: any[] = [];
+        djRows.forEach((row) => {
+          const tds = row.querySelectorAll('td');
+          if (tds.length < 5) return;
+          const djName = tds[0].textContent?.trim() || '';
+          if (!djName || djName.includes('Nenhum DJ cadastrado')) return;
+
+          const presskitStatusText = tds[1].querySelector('span')?.textContent?.trim() || '';
+          let presskitStatus = 'pending';
+          if (presskitStatusText.includes('✓') || presskitStatusText.toLowerCase().includes('compl')) {
+            presskitStatus = 'completed';
+          }
+          const presskitLinkElement = tds[1].querySelector('a');
+          const presskitUrl = presskitLinkElement ? presskitLinkElement.getAttribute('href') : '';
+
+          const musicNameSpan = tds[2].querySelector('span');
+          const musicName = (musicNameSpan?.textContent?.trim() === 'Sem Música Demo' ? '' : musicNameSpan?.textContent?.trim()) || '';
+          const musicLinkElement = tds[2].querySelector('a');
+          const musicUrl = musicLinkElement ? musicLinkElement.getAttribute('href') : '';
+
+          const agencies: any[] = [];
+          const labels: any[] = [];
+          
+          const divsInTd3 = tds[3].querySelectorAll('div');
+          if (divsInTd3.length >= 2) {
+            const agencyLinks = divsInTd3[0].querySelectorAll('a');
+            agencyLinks.forEach(link => {
+              const aName = link.textContent?.replace('↗', '').trim() || '';
+              const aUrl = link.getAttribute('href') || '';
+              agencies.push({ name: aName, link: aUrl });
+            });
+            
+            const labelLinks = divsInTd3[1].querySelectorAll('a');
+            labelLinks.forEach(link => {
+              const lName = link.textContent?.replace('↗', '').trim() || '';
+              const lUrl = link.getAttribute('href') || '';
+              labels.push({ name: lName, link: lUrl });
+            });
+          }
+
+          const flyerLink = Array.from(tds[4].querySelectorAll('a')).find(el => el.textContent?.includes('📸'));
+          const flyerPhoto = flyerLink ? flyerLink.getAttribute('href') : '';
+
+          const motionLink = Array.from(tds[4].querySelectorAll('a')).find(el => el.textContent?.includes('🎥'));
+          const animationVideo = motionLink ? motionLink.getAttribute('href') : '';
+
+          djsList.push({
+            name: djName,
+            presskitStatus,
+            presskitUrl: presskitUrl || '',
+            musicName,
+            musicUrl: musicUrl || '',
+            agencies,
+            labels,
+            flyerPhoto: flyerPhoto || '',
+            animationVideo: animationVideo || '',
+            rating: 0
+          });
+        });
+
+        // Payments parsing
+        const paymentRows = htmlDoc.querySelectorAll('#payments-tab tbody tr');
+        const paymentsList: any[] = [];
+        paymentRows.forEach((row) => {
+          const tds = row.querySelectorAll('td');
+          if (tds.length < 5) return;
+          const description = tds[0].textContent?.trim() || '';
+          if (!description || description.includes('Nenhum pagamento cadastrado')) return;
+
+          const amountText = tds[1].textContent?.replace('R$', '').replace(/\./g, '').replace(',', '.').trim() || '';
+          const amount = parseFloat(amountText) || 0;
+
+          const dueDateText = tds[2].textContent?.trim() || '';
+          let dueDate: any = null;
+          if (dueDateText && dueDateText !== 'Sem vencimento') {
+            const p = dueDateText.split('/');
+            if (p.length === 3) {
+              const d = new Date(parseInt(p[2]), parseInt(p[1]) - 1, parseInt(p[0]));
+              if (!isNaN(d.getTime())) {
+                dueDate = d.toISOString();
+              }
+            }
+          }
+
+          const paidAtText = tds[3].textContent?.trim() || '';
+          let paidAt: any = null;
+          if (paidAtText && paidAtText !== 'Pendente') {
+            const p = paidAtText.split('/');
+            if (p.length === 3) {
+              const d = new Date(parseInt(p[2]), parseInt(p[1]) - 1, parseInt(p[0]));
+              if (!isNaN(d.getTime())) {
+                paidAt = d.toISOString();
+              }
+            }
+          }
+
+          const statusSpanText = tds[4].querySelector('span')?.textContent?.trim() || '';
+          let payStatus = 'pending';
+          if (statusSpanText.toLowerCase().includes('pag') || statusSpanText.toLowerCase() === 'pago') {
+            payStatus = 'paid';
+          } else if (statusSpanText.toLowerCase().includes('atras') || statusSpanText.toLowerCase() === 'atrasado') {
+            payStatus = 'overdue';
+          }
+
+          paymentsList.push({
+            description,
+            amount,
+            dueDate,
+            paidAt,
+            status: payStatus
+          });
+        });
+
+        // Project documents parsing
+        const documentsList: any[] = [];
+        const documentLinks = Array.from(htmlDoc.querySelectorAll('a')).filter(el => el.textContent?.includes('Visualizar Documento'));
+        documentLinks.forEach(linkEl => {
+          const url = linkEl.getAttribute('href') || '';
+          const block = linkEl.closest('div');
+          if (!block) return;
+          
+          const h4El = block.querySelector('h4');
+          const docName = h4El ? h4El.textContent?.trim() : 'Documento';
+          if (docName === 'Nenhum documento arquivado') return;
+
+          const pEl = block.querySelector('p');
+          const pText = pEl ? pEl.textContent?.trim() || '' : '';
+          
+          let type = 'other';
+          if (pText.toLowerCase().includes('contrato') || pText.toLowerCase().includes('contract')) {
+            type = 'contract';
+          } else if (pText.toLowerCase().includes('recibo') || pText.toLowerCase().includes('receipt')) {
+            type = 'receipt';
+          } else if (pText.toLowerCase().includes('proposta') || pText.toLowerCase().includes('proposal')) {
+            type = 'proposal';
+          }
+
+          let docStatus = 'draft';
+          if (pText.toLowerCase().includes('assinado') || pText.toLowerCase().includes('signed')) {
+            docStatus = 'signed';
+          } else if (pText.toLowerCase().includes('pendente') || pText.toLowerCase().includes('pending')) {
+            docStatus = 'pending';
+          }
+
+          documentsList.push({
+            name: docName,
+            url,
+            type,
+            status: docStatus
+          });
+        });
+
+        const scrapedData = {
+          eventInfo: {
+            name,
+            logoUrl,
+            city,
+            location,
+            eventDate,
+            contractorName,
+            status,
+            djCount: djsList.length,
+            artCount: artsList.length,
+            motionCount: 0
+          },
+          artsList,
+          djsList,
+          paymentsList,
+          documentsList
+        };
+
+        setImportedData(scrapedData);
+        setErrorMessage(null);
+        toast.success("Tabelas analisadas e mapeadas do Relatório HTML!");
+      } catch (err: any) {
+        setErrorMessage(err.message || "Formato de arquivo HTML inconsistente.");
+        setImportedData(null);
+        toast.error("Erro ao analisar arquivo HTML");
       }
-      
-      setImportedData(data);
-      setErrorMessage(null);
-      toast.success("Arquivo de backup validado com sucesso!");
-    } catch (err: any) {
-      setErrorMessage(err.message || "Formato de arquivo inválido. Por favor, forneça o JSON exportado.");
-      setImportedData(null);
-      toast.error("Erro ao processar arquivo");
+    } else {
+      try {
+        const data = JSON.parse(fileText);
+        if (!data.eventInfo || !data.eventInfo.name) {
+          throw new Error("O arquivo JSON não é um backup de evento válido ou está corrompido.");
+        }
+        
+        setImportedData(data);
+        setErrorMessage(null);
+        toast.success("Arquivo de backup validado com sucesso!");
+      } catch (err: any) {
+        setErrorMessage(err.message || "Formato de arquivo inválido. Por favor, forneça o JSON exportado.");
+        setImportedData(null);
+        toast.error("Erro ao processar arquivo");
+      }
     }
   };
 
@@ -84,7 +399,10 @@ export function EventImporter({ profile, onEventImported, isMinimal = false }: E
 
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       const file = e.dataTransfer.files[0];
-      if (file.type === "application/json" || file.name.endsWith(".json")) {
+      const isJson = file.type === "application/json" || file.name.endsWith(".json");
+      const isHtml = file.type === "text/html" || file.name.endsWith(".html") || file.name.endsWith(".htm");
+      
+      if (isJson || isHtml) {
         const reader = new FileReader();
         reader.onload = (event) => {
           if (event.target?.result) {
@@ -93,7 +411,7 @@ export function EventImporter({ profile, onEventImported, isMinimal = false }: E
         };
         reader.readAsText(file);
       } else {
-        toast.error("Por favor, selecione apenas arquivos JSON de backup.");
+        toast.error("Por favor, selecione apenas arquivos JSON ou HTML de backup.");
       }
     }
   };
@@ -243,7 +561,7 @@ export function EventImporter({ profile, onEventImported, isMinimal = false }: E
             <span>Importação de Evento</span>
           </DialogTitle>
           <DialogDescription className="text-slate-400">
-            Traga um backup do evento gerado anteriormente pela ferramenta "Exportar Dados". Todos os DJs, entregas de artes, cronograma financeiro e contratos serão restaurados.
+            Traga um backup do evento gerado anteriormente pela ferramenta "Exportar Dados". Todos os DJs, entregas de artes, cronograma financeiro e contratos serão restaurados. Aceita arquivos .json e o relatório .html interativo.
           </DialogDescription>
         </DialogHeader>
 
@@ -265,7 +583,7 @@ export function EventImporter({ profile, onEventImported, isMinimal = false }: E
             <input 
               ref={fileInputRef}
               type="file" 
-              accept=".json"
+              accept=".json,.html,.htm"
               className="hidden" 
               onChange={handleFileInput}
             />
@@ -273,7 +591,7 @@ export function EventImporter({ profile, onEventImported, isMinimal = false }: E
               <Upload className="w-7 h-7" />
             </div>
             <div>
-              <p className="font-bold text-white text-base">Arraste e solte o arquivo JSON do backup</p>
+              <p className="font-bold text-white text-base">Arraste e solte o arquivo JSON ou HTML de backup</p>
               <p className="text-xs text-slate-500 mt-1">ou clique para navegar nos seus arquivos locais</p>
             </div>
           </div>

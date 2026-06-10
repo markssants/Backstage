@@ -268,6 +268,32 @@ export function Overview({ event, profile }: OverviewProps) {
   };
 
   const handleExportInteractiveHTML = () => {
+    const backupData = {
+      eventInfo: {
+        id: event.id,
+        name: event.name,
+        city: event.city || '',
+        location: event.location || '',
+        eventDate: event.eventDate || '',
+        contractorName: event.contractorName || '',
+        contractorEmail: event.contractorEmail || '',
+        contractorId: event.contractorId || '',
+        designerEmail: event.designerEmail || '',
+        designerId: event.designerId || '',
+        logoUrl: event.logoUrl || '',
+        driveUrl: event.driveUrl || '',
+        status: event.status || 'planning',
+        djCount: event.djCount || 0,
+        artCount: event.artCount || 0,
+        motionCount: event.motionCount || 0
+      },
+      artsList: arts,
+      djsList: djAssets,
+      paymentsList: payments,
+      documentsList: documents
+    };
+    const safeBackupPayload = JSON.stringify(backupData, null, 2).replace(/<\/script>/g, '<\\/script>');
+
     const finishedArtsCount = arts.filter(a => a.status === 'finished').length;
     const progressPercent = arts.length > 0 ? Math.round((finishedArtsCount / arts.length) * 100) : 0;
     const paidSum = payments.filter(p => p.status === 'paid').reduce((sum, p) => sum + p.amount, 0);
@@ -593,6 +619,9 @@ export function Overview({ event, profile }: OverviewProps) {
       button.classList.add('border-pink-500', 'text-white');
       button.classList.remove('border-transparent', 'text-slate-400');
     }
+  </script>
+  <script id="beys-arts-backup-data" type="application/json">
+    ${safeBackupPayload}
   </script>
 </body>
 </html>`;
