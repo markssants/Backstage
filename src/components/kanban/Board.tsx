@@ -3045,7 +3045,7 @@ export function KanbanBoard({ event, profile, onNavigateToDjAssets, initialSelec
                         navigator.clipboard.writeText(shareUrl);
                         toast.success("Link exclusivo copiado com sucesso!");
                       }}
-                      className="rounded-xl h-11 sm:h-10 px-4 bg-purple-50 hover:bg-purple-600 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5 border-none shrink-0"
+                      className="rounded-xl h-11 sm:h-10 px-4 bg-purple-500 hover:bg-purple-600 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5 border-none shrink-0"
                     >
                       <Share2 className="w-3.5 h-3.5" />
                       Copiar Link
