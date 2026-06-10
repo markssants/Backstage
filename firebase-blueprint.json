@@ -1,0 +1,126 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["designer", "contractor"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "email", "role"]
+    },
+    "Event": {
+      "title": "Event",
+      "description": "An event party project",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "logoUrl": { "type": "string" },
+        "driveUrl": { "type": "string" },
+        "contractorName": { "type": "string" },
+        "city": { "type": "string" },
+        "eventDate": { "type": "string" },
+        "djCount": { "type": "number" },
+        "artCount": { "type": "number" },
+        "motionCount": { "type": "number" },
+        "location": { "type": "string" },
+        "contractorId": { "type": "string" },
+        "designerId": { "type": "string" },
+        "status": { "type": "string", "enum": ["planning", "ongoing", "completed"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "contractorId", "designerId", "status"]
+    },
+    "Art": {
+      "title": "Art",
+      "description": "A specific art piece required for the event",
+      "type": "object",
+      "properties": {
+        "eventId": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "priority": { "type": "string", "enum": ["low", "medium", "high"] },
+        "category": { "type": "string", "enum": ["dj", "party", "branding"] },
+        "deadline": { "type": "string" },
+        "status": { "type": "string", "enum": ["todo", "production", "review", "delivered", "post", "finished"] },
+        "position": { "type": "number" },
+        "color": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["eventId", "title", "priority", "status", "position"]
+    },
+    "DjAsset": {
+      "title": "DJ Asset",
+      "description": "DJ presskit and music info",
+      "type": "object",
+      "properties": {
+        "eventId": { "type": "string" },
+        "name": { "type": "string" },
+        "presskitUrl": { "type": "string" },
+        "musicName": { "type": "string" },
+        "musicUrl": { "type": "string" },
+        "musicDuration": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["eventId", "name"]
+    },
+    "Document": {
+      "title": "Document",
+      "description": "Contracts and receipts",
+      "type": "object",
+      "properties": {
+        "eventId": { "type": "string" },
+        "type": { "type": "string", "enum": ["contract", "receipt", "proposal"] },
+        "status": { "type": "string", "enum": ["pending", "signed"] },
+        "url": { "type": "string" },
+        "name": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["eventId", "type", "url", "name"]
+    },
+    "Payment": {
+      "title": "Payment",
+      "description": "Payment installment info",
+      "type": "object",
+      "properties": {
+        "eventId": { "type": "string" },
+        "description": { "type": "string" },
+        "amount": { "type": "number" },
+        "status": { "type": "string", "enum": ["paid", "pending", "overdue"] },
+        "dueDate": { "type": "string", "format": "date-time" },
+        "paidAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["eventId", "description", "amount", "status", "dueDate"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "events/{eventId}": {
+      "schema": "Event",
+      "description": "Event projects"
+    },
+    "events/{eventId}/arts/{artId}": {
+      "schema": "Art",
+      "description": "Arts tasks for an event"
+    },
+    "events/{eventId}/dj_assets/{assetId}": {
+      "schema": "DjAsset",
+      "description": "DJ assets for an event"
+    },
+    "events/{eventId}/documents/{docId}": {
+      "schema": "Document",
+      "description": "Documents for an event"
+    },
+    "events/{eventId}/payments/{paymentId}": {
+      "schema": "Payment",
+      "description": "Payments for an event"
+    }
+  }
+}

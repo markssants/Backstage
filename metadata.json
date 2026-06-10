@@ -1,0 +1,8 @@
+{
+  "name": "Backstage",
+  "description": "Plataforma para gestão de artes e cronogramas de eventos para designers e contratantes.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

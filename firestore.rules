@@ -1,0 +1,172 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper Functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && 
+             request.auth.token.email == 'beysarts@gmail.com';
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]*$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Event Membership Check
+    function isEventMember(eventId) {
+      return isAdmin() || (
+             isSignedIn() && 
+             exists(/databases/$(database)/documents/events/$(eventId)) && (
+               ('contractorId' in get(/databases/$(database)/documents/events/$(eventId)).data && get(/databases/$(database)/documents/events/$(eventId)).data.contractorId == request.auth.uid) || 
+               ('designerId' in get(/databases/$(database)/documents/events/$(eventId)).data && get(/databases/$(database)/documents/events/$(eventId)).data.designerId == request.auth.uid)
+             )
+      );
+    }
+
+    // --- Users ---
+    match /users/{userId} {
+      allow get: if isOwner(userId) || isAdmin();
+      allow list: if isAdmin();
+      allow create: if isOwner(userId) && 
+        incoming().id == userId &&
+        incoming().role in ['designer', 'contractor'] &&
+        incoming().email == request.auth.token.email &&
+        incoming().createdAt == request.time;
+      allow update: if isAdmin() || (
+        isOwner(userId) &&
+        incoming().id == userId &&
+        incoming().email == existing().email &&
+        (incoming().role == existing().role || existing().role == null)
+      );
+      allow delete: if isAdmin();
+    }
+
+    // --- Events ---
+    match /events/{eventId} {
+      function isValidEvent(data) {
+        return data.name is string && data.name.size() <= 100 &&
+               (!('status' in data) || data.status in ['planning', 'ongoing', 'completed']) &&
+               (!('contractorId' in data) || isValidId(data.contractorId)) &&
+               (!('designerId' in data) || isValidId(data.designerId)) &&
+               (!('contractorName' in data) || (data.contractorName is string && data.contractorName.size() <= 100)) &&
+               (!('city' in data) || (data.city is string && data.city.size() <= 100)) &&
+               (!('eventDate' in data) || (data.eventDate is string && data.eventDate.size() <= 100)) &&
+               (!('djCount' in data) || (data.djCount is number)) &&
+               (!('artCount' in data) || (data.artCount is number)) &&
+               (!('motionCount' in data) || (data.motionCount is number)) &&
+               (!('location' in data) || (data.location is string && data.location.size() <= 200));
+      }
+
+      allow get: if isEventMember(eventId);
+      allow list: if isAdmin() || (isSignedIn() && (
+        ('contractorId' in resource.data && resource.data.contractorId == request.auth.uid) || 
+        ('designerId' in resource.data && resource.data.designerId == request.auth.uid)
+      ));
+      
+      allow create: if (isAdmin() || (isSignedIn() && (
+        (incoming().designerId == request.auth.uid) || 
+        (incoming().contractorId == request.auth.uid)
+      ))) &&
+        isValidId(incoming().contractorId) &&
+        isValidId(incoming().designerId) &&
+        isValidEvent(incoming());
+      
+      allow update: if isAdmin() || (
+        isEventMember(eventId) &&
+        isValidEvent(incoming()) &&
+        incoming().diff(existing()).affectedKeys().hasAny(['name', 'logoUrl', 'driveUrl', 'status', 'designerId', 'contractorId', 'contractorName', 'city', 'eventDate', 'djCount', 'artCount', 'motionCount', 'location', 'contractorEmail', 'designerEmail', 'updatedAt'])
+      );
+
+      allow delete: if isAdmin();
+    }
+
+    // --- Arts ---
+    match /events/{eventId}/arts/{artId} {
+      function isValidArt(data) {
+        return data.title is string && data.title.size() <= 100 &&
+               data.priority in ['low', 'medium', 'high'] &&
+               data.status in ['todo', 'production', 'review', 'delivered', 'post', 'finished'] &&
+               data.category in ['dj', 'party', 'branding'] &&
+               data.position is number &&
+               isValidId(data.eventId) &&
+               (!('description' in data) || (data.description is string && data.description.size() <= 2000)) &&
+               (!('deadline' in data) || (data.deadline is timestamp || data.deadline is string || data.deadline == null)) &&
+               (!('color' in data) || (data.color is string && data.color.size() <= 20)) &&
+               (!('createdAt' in data) || (data.createdAt is timestamp || data.createdAt == null));
+      }
+
+      allow read: if isEventMember(eventId);
+      allow create: if isEventMember(eventId) && isValidArt(incoming());
+      allow update: if isEventMember(eventId) && isValidArt(incoming()) && (
+        isAdmin() || 
+        incoming().diff(existing()).affectedKeys().hasOnly(['title', 'description', 'priority', 'category', 'deadline', 'status', 'position', 'color'])
+      );
+      allow delete: if isEventMember(eventId);
+    }
+
+    // --- DJ Assets ---
+    match /events/{eventId}/dj_assets/{assetId} {
+      allow get: if true;
+      allow list: if isEventMember(eventId);
+      allow create: if isEventMember(eventId) && 
+        incoming().name is string && incoming().name.size() <= 100;
+      allow update: if isEventMember(eventId) || (
+        incoming().name == existing().name &&
+        (!('priority' in incoming()) || !('priority' in existing()) || incoming().priority == existing().priority) &&
+        (!('artDeadline' in incoming()) || !('artDeadline' in existing()) || incoming().artDeadline == existing().artDeadline)
+      );
+      allow delete: if isEventMember(eventId);
+    }
+
+    // --- Documents ---
+    match /events/{eventId}/documents/{docId} {
+      allow read: if isEventMember(eventId);
+      allow create, update: if isEventMember(eventId) &&
+        (!('name' in incoming()) || (incoming().name is string && incoming().name.size() <= 200)) &&
+        (!('type' in incoming()) || (incoming().type in ['contract', 'receipt', 'proposal'])) &&
+        (!('status' in incoming()) || (incoming().status in ['pending', 'signed']));
+      allow delete: if isEventMember(eventId);
+    }
+
+    // --- Payments ---
+    match /events/{eventId}/payments/{paymentId} {
+      allow read: if isEventMember(eventId);
+      allow create, update: if isEventMember(eventId) &&
+        (!('description' in incoming()) || (incoming().description is string && incoming().description.size() <= 200)) &&
+        (!('amount' in incoming()) || (incoming().amount is number)) &&
+        (!('status' in incoming()) || (incoming().status in ['paid', 'pending', 'overdue']));
+      allow delete: if isEventMember(eventId);
+    }
+
+    // --- Pending Changes ---
+    match /events/{eventId}/pending_changes/{changeId} {
+      allow read, create, update, delete: if isEventMember(eventId);
+    }
+
+    // --- Settings ---
+    match /settings/google_drive {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+  }
+}
