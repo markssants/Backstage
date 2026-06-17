@@ -285,7 +285,8 @@ export function Overview({ event, profile }: OverviewProps) {
         status: event.status || 'planning',
         djCount: event.djCount || 0,
         artCount: event.artCount || 0,
-        motionCount: event.motionCount || 0
+        motionCount: event.motionCount || 0,
+        paymentValue: event.paymentValue || ''
       },
       artsList: arts,
       djsList: djAssets,
@@ -458,6 +459,7 @@ export function Overview({ event, profile }: OverviewProps) {
             <span class="flex items-center gap-1">📅 ${event.eventDate || 'Sem Data'}</span>
             <span>•</span>
             <span class="flex items-center gap-1">👤 Contratante: ${event.contractorName || 'Não especificado'}</span>
+            ${event.paymentValue ? `<span>•</span> <span>💰 Pagamento: ${event.paymentValue}</span>` : ''}
           </div>
         </div>
       </div>
@@ -688,7 +690,7 @@ export function Overview({ event, profile }: OverviewProps) {
                 <span>Exportar Dados</span>
               </button>
 
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <div className="bg-white/5 px-3 py-1.5 rounded-xl border border-white/10 flex items-center gap-2">
                   <Palette className="w-3 h-3 text-pink-400" />
                   <span className="text-[10px] font-bold text-white">{event.artCount || 0} Artes</span>
@@ -701,6 +703,12 @@ export function Overview({ event, profile }: OverviewProps) {
                   <Clock className="w-3 h-3 text-blue-400" />
                   <span className="text-[10px] font-bold text-white">{event.motionCount || 0} Motions</span>
                 </div>
+                {event.paymentValue && (
+                  <div className="bg-cyan-500/10 px-3 py-1.5 rounded-xl border border-cyan-500/20 flex items-center gap-2 shadow-[0_0_15px_rgba(34,211,238,0.1)]">
+                    <CreditCard className="w-3 h-3 text-cyan-400" />
+                    <span className="text-[10px] font-black text-white">Vlr. Pagamento: <span className="text-cyan-300">{event.paymentValue}</span></span>
+                  </div>
+                )}
               </div>
             </div>
           </div>

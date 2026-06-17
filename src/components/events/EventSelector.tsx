@@ -37,6 +37,7 @@ export function EventSelector({ profile, onEventCreated, onEventUpdated, isMinim
   const [artCount, setArtCount] = useState('');
   const [motionCount, setMotionCount] = useState('');
   const [location, setLocation] = useState('');
+  const [paymentValue, setPaymentValue] = useState('');
 
   const isEditing = !!editEvent;
 
@@ -53,6 +54,7 @@ export function EventSelector({ profile, onEventCreated, onEventUpdated, isMinim
       setArtCount(editEvent.artCount?.toString() || '');
       setMotionCount(editEvent.motionCount?.toString() || '');
       setLocation(editEvent.location || '');
+      setPaymentValue(editEvent.paymentValue || '');
       
       if (editEvent.eventDate) {
         try {
@@ -81,6 +83,7 @@ export function EventSelector({ profile, onEventCreated, onEventUpdated, isMinim
         artCount: parseInt(artCount) || 0,
         motionCount: parseInt(motionCount) || 0,
         location,
+        paymentValue,
         contractorEmail: profile.role === 'contractor' ? profile.email : contractorEmail,
         designerEmail: profile.role === 'designer' ? profile.email : designerEmail,
         updatedAt: serverTimestamp(),
@@ -124,6 +127,7 @@ export function EventSelector({ profile, onEventCreated, onEventUpdated, isMinim
     setArtCount('');
     setMotionCount('');
     setLocation('');
+    setPaymentValue('');
     setContractorEmail('');
     setDesignerEmail('');
   };
@@ -279,6 +283,18 @@ export function EventSelector({ profile, onEventCreated, onEventUpdated, isMinim
                 onChange={(e) => setLocation(e.target.value)}
               />
             </div>
+          </div>
+
+          <div className="space-y-2 bg-cyan-950/15 border border-cyan-500/20 p-4 rounded-[1.5rem] relative overflow-hidden shadow-inner">
+            <div className="absolute top-0 right-0 w-24 h-24 bg-cyan-500/5 rounded-full blur-[20px]" />
+            <Label htmlFor="paymentValue" className="text-[10px] uppercase font-black tracking-widest text-cyan-400">Valor do Pagamento ($)</Label>
+            <Input 
+              id="paymentValue" 
+              placeholder="Ex: R$ 5.000,00" 
+              className="rounded-2xl bg-white/5 border-white/5 text-cyan-200 placeholder:text-slate-600 h-11 focus:ring-cyan-500 font-bold mt-1"
+              value={paymentValue}
+              onChange={(e) => setPaymentValue(e.target.value)}
+            />
           </div>
 
           <div className="space-y-2">

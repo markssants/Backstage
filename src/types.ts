@@ -20,6 +20,7 @@ export interface EventProject {
   artCount?: number;
   motionCount?: number;
   location?: string;
+  paymentValue?: string;
   contractorId: string;
   designerId: string;
   contractorEmail?: string;
