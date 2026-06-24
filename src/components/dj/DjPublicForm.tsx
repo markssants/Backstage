@@ -4,7 +4,7 @@ import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../../firebase';
 import { DjAsset } from '../../types';
 import { WaveformSelector } from './WaveformSelector';
-import { getDriveAccessToken, uploadFileToGoogleDrive, getGoogleDriveFileId, getOrRequestDriveToken } from '../../lib/googleDrive';
+import { getDriveAccessToken, getGoogleDriveFileId } from '../../lib/googleDrive';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
@@ -161,68 +161,43 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
     setUploadingState(prev => ({ ...prev, [fieldKey]: true }));
     setUploadProgress(prev => ({ ...prev, [fieldKey]: 0 }));
 
-    // Try Google Drive first (using active user's logged account Drive)
+    // Upload directly to Firebase Storage
     try {
-      const accessToken = await getOrRequestDriveToken();
-      if (!accessToken) {
-        throw new Error("Para realizar o upload, a permissão do Google Drive é obrigatória.");
-      }
-
-      console.log("Enviando arquivo para o Google Drive...");
-      const downloadUrl = await uploadFileToGoogleDrive(file, accessToken, (progress) => {
-        setUploadProgress(prev => ({ ...prev, [fieldKey]: progress }));
+      const refinedFileName = `${Date.now()}_${file.name.replace(/\s+/g, '_')}`;
+      const storagePath = `events/${eventId}/dj_assets/${refinedFileName}`;
+      const fileRef = ref(storage, storagePath);
+      
+      const uploadTask = uploadBytesResumable(fileRef, file);
+      const downloadUrl = await new Promise<string>((resolve, reject) => {
+        uploadTask.on(
+          'state_changed',
+          (snapshot) => {
+            const progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+            setUploadProgress(prev => ({ ...prev, [fieldKey]: progress }));
+          },
+          (error) => {
+            reject(error);
+          },
+          async () => {
+            try {
+              const url = await getDownloadURL(uploadTask.snapshot.ref);
+              resolve(url);
+            } catch (err) {
+              reject(err);
+            }
+          }
+        );
       });
-
+      
       if (fieldKey === 'musicUrl') {
         setMusicUrl(downloadUrl);
         setMusicUrlType('file');
         setMusicName(curr => curr || file.name.replace(/\.[^/.]+$/, ""));
-        setDurationMode('visual'); // Switch to visual on successful upload
-        toast.success("Música enviada para o Google Drive do evento com sucesso!");
+        setDurationMode('visual'); // Switch to visual on successful upload!
+        toast.success("Música enviada com sucesso!");
       }
-      return; // Succeeded! Avoid running the fallback code
-    } catch (gdriveErr: any) {
-      console.warn("Upload para o Google Drive falhou ou Google Drive não configurado, tentando fallbacks (Firebase/Local)...", gdriveErr);
-
-      // Fallback 1: Firebase Storage
-      try {
-        const refinedFileName = `${Date.now()}_${file.name.replace(/\s+/g, '_')}`;
-        const storagePath = `events/${eventId}/dj_assets/${refinedFileName}`;
-        const fileRef = ref(storage, storagePath);
-        
-        const uploadTask = uploadBytesResumable(fileRef, file);
-        const downloadUrl = await new Promise<string>((resolve, reject) => {
-          uploadTask.on(
-            'state_changed',
-            (snapshot) => {
-              const progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
-              setUploadProgress(prev => ({ ...prev, [fieldKey]: progress }));
-            },
-            (error) => {
-              reject(error);
-            },
-            async () => {
-              try {
-                const url = await getDownloadURL(uploadTask.snapshot.ref);
-                resolve(url);
-              } catch (err) {
-                reject(err);
-              }
-            }
-          );
-        });
-        
-        if (fieldKey === 'musicUrl') {
-          setMusicUrl(downloadUrl);
-          setMusicUrlType('file');
-          setMusicName(curr => curr || file.name.replace(/\.[^/.]+$/, ""));
-          setDurationMode('visual'); // Switch to visual on successful upload!
-          toast.success("Música enviada com sucesso (Firebase Storage)!");
-        }
-        return;
-      } catch (err: any) {
-        console.warn("Firebase Storage failed, attempting local server upload fallback...", err);
-      }
+    } catch (err: any) {
+      console.warn("Firebase Storage failed, attempting local server upload fallback...", err);
 
       // Fallback 2: Local Node dev server upload
       try {
@@ -263,15 +238,11 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
         }
       } catch (fallbackErr: any) {
         console.error("Todos os envios falharam:", fallbackErr);
-        const errorMessage = fallbackErr?.message || String(fallbackErr);
         toast.custom((t) => (
           <div className="bg-slate-900 border border-red-500/30 p-4 rounded-xl text-white max-w-sm shadow-xl font-sans text-xs">
             <p className="font-bold text-red-400 mb-1">⚠️ Envio de Arquivo Indisponível</p>
             <p className="text-slate-300 leading-normal mb-1">
-              O upload para o Google Drive, Firebase Storage e servidor local falharam.
-            </p>
-            <p className="text-red-400 bg-red-950/40 p-1.5 rounded font-mono text-[10px] mb-2 break-all border border-red-900/30">
-              Detalhes de Erro de Drive: {gdriveErr?.message || String(gdriveErr)}
+              O upload para o Firebase Storage e servidor local falharam.
             </p>
             <p className="text-purple-400 leading-normal">
               <strong>Alternativa Rápida:</strong> Clique em <b>"Colar Link / URL"</b> acima e insira um link direto do Drive, Dropbox, Soundcloud ou Youtube!
