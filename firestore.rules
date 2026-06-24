@@ -95,6 +95,11 @@ service cloud.firestore {
         isEventMember(eventId) &&
         isValidEvent(incoming()) &&
         incoming().diff(existing()).affectedKeys().hasAny(['name', 'logoUrl', 'driveUrl', 'status', 'designerId', 'contractorId', 'contractorName', 'city', 'eventDate', 'djCount', 'artCount', 'motionCount', 'location', 'contractorEmail', 'designerEmail', 'updatedAt'])
+      ) || (
+        isSignedIn() &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['contractorId', 'contractorEmail']) &&
+        (!('contractorId' in existing()) || existing().contractorId == 'unresolved' || existing().contractorId == '') &&
+        incoming().contractorId == request.auth.uid
       );
 
       allow delete: if isAdmin();

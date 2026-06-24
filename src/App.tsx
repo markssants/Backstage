@@ -54,25 +54,31 @@ export default function App() {
           const inviteEventId = queryParams.get('inviteEventId');
 
           if (inviteEventId) {
-            if (!currentProfile) {
-              const newProfile: UserProfile = {
-                id: user.uid,
-                name: user.displayName || 'User',
-                email: user.email || '',
-                role: 'contractor',
-                createdAt: serverTimestamp(),
-              };
-              await setDoc(doc(db, 'users', user.uid), newProfile);
-              setProfile(newProfile);
+            try {
+              if (!currentProfile) {
+                const newProfile: UserProfile = {
+                  id: user.uid,
+                  name: user.displayName || 'User',
+                  email: user.email || '',
+                  role: 'contractor',
+                  createdAt: serverTimestamp(),
+                };
+                await setDoc(doc(db, 'users', user.uid), newProfile);
+                setProfile(newProfile);
+                currentProfile = newProfile;
+              }
+              
+              await updateDoc(doc(db, 'events', inviteEventId), {
+                contractorId: user.uid,
+                contractorEmail: user.email || ''
+              });
+              
+              window.history.replaceState({}, document.title, window.location.pathname);
+              toast.success("Festa vinculada à sua conta com sucesso!");
+            } catch (inviteErr: any) {
+              console.error("Erro ao vincular festa:", inviteErr);
+              toast.error("Sua conta foi acessada, mas não foi possível vincular a festa. Verifique as regras de segurança.");
             }
-            
-            await updateDoc(doc(db, 'events', inviteEventId), {
-              contractorId: user.uid,
-              contractorEmail: user.email || ''
-            });
-            
-            window.history.replaceState({}, document.title, window.location.pathname);
-            toast.success("Festa vinculada à sua conta com sucesso!");
           }
 
         } catch (err: any) {
