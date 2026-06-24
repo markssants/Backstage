@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
-import { Calendar as CalendarIcon, Plus, Loader2, Image as ImageIcon, Settings2 } from "lucide-react";
+import { Calendar as CalendarIcon, Plus, Loader2, Image as ImageIcon, Settings2, Share2 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -343,7 +343,34 @@ export function EventSelector({ profile, onEventCreated, onEventUpdated, isMinim
             </div>
           )}
         </div>
-        <DialogFooter>
+
+        {isEditing && (
+          <div className="bg-purple-500/10 border border-purple-500/20 p-4 rounded-xl flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 mt-2">
+            <div className="space-y-1">
+              <h4 className="text-[10px] font-black uppercase tracking-widest text-purple-400">
+                Link de Convite para o Contratante
+              </h4>
+              <p className="text-[10px] text-slate-400">
+                Envie este link para o contratante criar uma conta já com esta festa vinculada.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              type="button"
+              onClick={() => {
+                const shareUrl = `${window.location.origin}/?inviteEventId=${editEvent!.id}`;
+                navigator.clipboard.writeText(shareUrl);
+                toast.success("Link de convite copiado com sucesso!");
+              }}
+              className="rounded-xl h-11 sm:h-10 px-4 bg-purple-500 hover:bg-purple-600 text-white text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5 border-none shrink-0"
+            >
+              <Share2 className="w-3.5 h-3.5" />
+              Copiar Link
+            </Button>
+          </div>
+        )}
+
+        <DialogFooter className="mt-6">
           <Button 
             disabled={loading || !name.trim()} 
             onClick={handleSubmit} 

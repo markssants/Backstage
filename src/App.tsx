@@ -6,7 +6,7 @@ import {
   User,
   signOut
 } from 'firebase/auth';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { UserProfile, UserRole } from './types';
 import { Dashboard } from './components/dashboard/Dashboard';
@@ -42,11 +42,39 @@ export default function App() {
       if (user) {
         try {
           const userDoc = await getDoc(doc(db, 'users', user.uid));
+          let currentProfile = null;
           if (userDoc.exists()) {
-            setProfile(userDoc.data() as UserProfile);
+            currentProfile = userDoc.data() as UserProfile;
+            setProfile(currentProfile);
           } else {
             setProfile(null);
           }
+
+          const queryParams = new URLSearchParams(window.location.search);
+          const inviteEventId = queryParams.get('inviteEventId');
+
+          if (inviteEventId) {
+            if (!currentProfile) {
+              const newProfile: UserProfile = {
+                id: user.uid,
+                name: user.displayName || 'User',
+                email: user.email || '',
+                role: 'contractor',
+                createdAt: serverTimestamp(),
+              };
+              await setDoc(doc(db, 'users', user.uid), newProfile);
+              setProfile(newProfile);
+            }
+            
+            await updateDoc(doc(db, 'events', inviteEventId), {
+              contractorId: user.uid,
+              contractorEmail: user.email || ''
+            });
+            
+            window.history.replaceState({}, document.title, window.location.pathname);
+            toast.success("Festa vinculada à sua conta com sucesso!");
+          }
+
         } catch (err: any) {
           console.error("Erro ao carregar perfil do Firestore:", err);
           toast.error("Conectado à conta, mas falha ao sincronizar com o banco de dados Firestore. Verifique suas regras de segurança ou id do banco.");

@@ -1313,10 +1313,10 @@ export function KanbanBoard({ event, profile, onNavigateToDjAssets, initialSelec
 
         <div 
           ref={scrollContainerRef}
-          className="flex overflow-x-auto pb-8 gap-6 min-h-[600px] custom-scrollbar snap-x px-2"
+          className="flex overflow-x-auto pb-8 gap-6 min-h-[600px] custom-scrollbar px-2"
         >
           {COLUMNS.map(column => (
-          <div key={column.id} className="flex flex-col space-y-3 rounded-3xl bg-white/5 p-4 border border-white/5 backdrop-blur-md w-[280px] shrink-0 shadow-2xl snap-center">
+          <div key={column.id} className="flex flex-col space-y-3 rounded-3xl bg-white/5 p-4 border border-white/5 backdrop-blur-md w-[280px] shrink-0 shadow-2xl">
             <div className="flex items-center justify-between px-1 mb-6">
               <div className="flex items-center space-x-3">
                 <div className={cn("w-2 h-2 rounded-full shadow-[0_0_10px_currentColor]", column.color)} />
