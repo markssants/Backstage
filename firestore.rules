@@ -98,7 +98,7 @@ service cloud.firestore {
       ) || (
         isSignedIn() &&
         incoming().diff(existing()).affectedKeys().hasOnly(['contractorId', 'contractorEmail']) &&
-        (!('contractorId' in existing()) || existing().contractorId == 'unresolved' || existing().contractorId == '') &&
+        (!('contractorId' in existing()) || existing().contractorId == 'unresolved' || existing().contractorId == '' || existing().contractorId == request.auth.uid) &&
         incoming().contractorId == request.auth.uid
       );
 

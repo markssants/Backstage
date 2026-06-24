@@ -76,6 +76,15 @@ export default function App() {
               window.history.replaceState({}, document.title, window.location.pathname);
               toast.success("Festa vinculada à sua conta com sucesso!");
             } catch (inviteErr: any) {
+              try {
+                const checkDoc = await getDoc(doc(db, 'events', inviteEventId));
+                if (checkDoc.exists() && checkDoc.data().contractorId === user.uid) {
+                  window.history.replaceState({}, document.title, window.location.pathname);
+                  toast.success("Festa vinculada à sua conta com sucesso!");
+                  return;
+                }
+              } catch (e) {}
+
               console.error("Erro ao vincular festa:", inviteErr);
               toast.error("Sua conta foi acessada, mas não foi possível vincular a festa. Verifique as regras de segurança.");
             }
