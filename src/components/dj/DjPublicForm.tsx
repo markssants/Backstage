@@ -168,7 +168,7 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
       const fileRef = ref(storage, storagePath);
       
       const uploadTask = uploadBytesResumable(fileRef, file);
-      const downloadUrl = await new Promise<string>((resolve, reject) => {
+      let downloadUrl = await new Promise<string>((resolve, reject) => {
         uploadTask.on(
           'state_changed',
           (snapshot) => {
@@ -189,6 +189,38 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
         );
       });
       
+      // Tentar espelhar para o Google Drive via Apps Script, se configurado
+      try {
+        const settingsDoc = await getDoc(doc(db, 'settings', 'google_drive'));
+        if (settingsDoc.exists()) {
+          const appsScriptUrl = settingsDoc.data().appsScriptUrl;
+          if (appsScriptUrl) {
+            toast.loading("Transferindo para o Google Drive do Organizador...", { id: 'gdrive-sync' });
+            
+            // O Apps Script receberá os dados e fará o download do Firebase Storage
+            const response = await fetch(appsScriptUrl, {
+              method: 'POST',
+              mode: 'no-cors', // Necessário se o Apps Script não retornar headers CORS no redirecionamento
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                fileUrl: downloadUrl,
+                fileName: file.name,
+                eventName: event?.name || 'Evento Desconhecido',
+                djName: djName || 'DJ'
+              })
+            });
+            
+            // Com no-cors, a resposta sempre é "opaque", não podemos ler JSON de sucesso
+            toast.success("Arquivo em processo de sincronização com o Google Drive!", { id: 'gdrive-sync' });
+          }
+        }
+      } catch (err) {
+        console.error("Erro ao sincronizar com Google Drive via Apps Script:", err);
+        toast.dismiss('gdrive-sync');
+      }
+
       if (fieldKey === 'musicUrl') {
         setMusicUrl(downloadUrl);
         setMusicUrlType('file');

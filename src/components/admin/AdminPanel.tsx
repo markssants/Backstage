@@ -25,7 +25,11 @@ export function AdminPanel({ profile }: AdminPanelProps) {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [events, setEvents] = useState<EventProject[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'users' | 'events'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'events' | 'settings'>('users');
+  
+  // Settings State
+  const [appsScriptUrl, setAppsScriptUrl] = useState('');
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
   
   // Search & Filter
   const [userSearch, setUserSearch] = useState('');
@@ -92,9 +96,16 @@ export function AdminPanel({ profile }: AdminPanelProps) {
       handleFirestoreError(error, OperationType.LIST, 'events');
     });
 
+    const unsubscribeSettings = onSnapshot(doc(db, 'settings', 'google_drive'), (docSnap) => {
+      if (docSnap.exists()) {
+        setAppsScriptUrl(docSnap.data().appsScriptUrl || '');
+      }
+    });
+
     return () => {
       unsubscribeUsers();
       unsubscribeEvents();
+      unsubscribeSettings();
     };
   }, []);
 
@@ -153,6 +164,22 @@ export function AdminPanel({ profile }: AdminPanelProps) {
     } catch (err) {
       toast.error("Erro ao cadastrar usuário.");
       console.error(err);
+    }
+  };
+
+  const handleSaveSettings = async () => {
+    setIsSavingSettings(true);
+    try {
+      await setDoc(doc(db, 'settings', 'google_drive'), {
+        appsScriptUrl: appsScriptUrl.trim(),
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+      toast.success("Configurações salvas com sucesso!");
+    } catch (err) {
+      console.error(err);
+      toast.error("Erro ao salvar configurações.");
+    } finally {
+      setIsSavingSettings(false);
     }
   };
 
@@ -385,7 +412,60 @@ export function AdminPanel({ profile }: AdminPanelProps) {
           <Layers className="w-4 h-4" />
           <span>Festas e Designações ({events.length})</span>
         </button>
+        <button
+          onClick={() => setActiveTab('settings')}
+          className={`flex items-center space-x-2 px-6 py-4 border-b-2 font-black tracking-tight text-sm transition-all relative ${
+            activeTab === 'settings' 
+              ? 'border-pink-500 text-white bg-pink-500/5' 
+              : 'border-transparent text-slate-500 hover:text-slate-200'
+          }`}
+        >
+          <Settings className="w-4 h-4" />
+          <span>Configurações</span>
+        </button>
       </div>
+
+      {/* SETTINGS MANAGEMENT TAB CONTENT */}
+      {activeTab === 'settings' && (
+        <div className="space-y-6">
+          <div className="glass-card p-6 md:p-8 rounded-3xl border-white/5">
+            <h3 className="text-xl font-black text-white flex items-center space-x-2 mb-6">
+              <ExternalLink className="w-5 h-5 text-pink-500" />
+              <span>Integração Automática com Google Drive</span>
+            </h3>
+            <p className="text-slate-400 text-sm max-w-3xl mb-8 leading-relaxed">
+              Para permitir que os DJs enviem os arquivos <strong>diretamente para o seu Google Drive</strong> sem precisar fazer login,
+              você precisa colar abaixo a URL do seu Google Apps Script (Web App) que configuramos.
+              <br/><br/>
+              <em>Se estiver vazio, os arquivos continuarão sendo enviados normalmente para o Firebase Storage de forma robusta e segura.</em>
+            </p>
+
+            <div className="space-y-4 max-w-3xl">
+              <div>
+                <Label className="text-[10px] font-black tracking-widest uppercase text-slate-400 mb-2 block">
+                  URL do Google Apps Script (Web App)
+                </Label>
+                <Input
+                  placeholder="https://script.google.com/macros/s/SUA-CHAVE-AQUI/exec"
+                  value={appsScriptUrl}
+                  onChange={(e) => setAppsScriptUrl(e.target.value)}
+                  className="bg-white/5 border-white/10 rounded-xl text-white h-12 w-full"
+                />
+              </div>
+
+              <div className="pt-4">
+                <Button
+                  onClick={handleSaveSettings}
+                  disabled={isSavingSettings}
+                  className="rounded-2xl h-11 px-8 text-xs font-black bg-pink-500 hover:bg-pink-600 text-white shadow-lg shadow-pink-500/20 border-none transition-all"
+                >
+                  {isSavingSettings ? 'Salvando...' : 'Salvar Configurações'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* USERS MANAGEMENT TAB CONTENT */}
       {activeTab === 'users' && (
