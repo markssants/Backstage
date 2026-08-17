@@ -62,6 +62,9 @@ export interface DjAsset {
   id: string;
   eventId: string;
   name: string;
+  isVersus?: boolean;
+  
+  // DJ 1 info (or single DJ)
   presskitUrl?: string;
   presskitType?: 'link' | 'file' | 'email';
   musicName?: string;
@@ -81,7 +84,28 @@ export interface DjAsset {
   visualMaterialType?: 'both' | 'photo' | 'video';
   priority?: 'low' | 'medium' | 'urgent';
   presskitStatus?: 'pending' | 'completed';
+
+  // DJ 2 info (for Versus / B2B mode)
+  dj2Name?: string;
+  dj2PresskitUrl?: string;
+  dj2PresskitType?: 'link' | 'file' | 'email';
+  dj2MusicName?: string;
+  dj2MusicUrl?: string;
+  dj2MusicUrlType?: 'link' | 'file';
+  dj2MusicDuration?: string;
+  dj2HasMandatoryLogo?: boolean;
+  dj2AgencyInfo?: string;
+  dj2LabelInfo?: string;
+  dj2Agencies?: DjAgency[];
+  dj2Labels?: DjLabel[];
+  dj2FlyerPhoto?: string;
+  dj2FlyerPhotoType?: 'link' | 'file';
+  dj2AnimationVideo?: string;
+  dj2AnimationVideoType?: 'link' | 'file';
+  dj2VisualMaterialType?: 'both' | 'photo' | 'video';
+
   createdAt: any;
+  updatedAt?: any;
 }
 
 export interface ProjectDocument {

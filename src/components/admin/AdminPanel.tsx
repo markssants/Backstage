@@ -453,7 +453,7 @@ export function AdminPanel({ profile }: AdminPanelProps) {
                 />
               </div>
 
-              <div className="pt-4">
+              <div className="pt-4 flex items-center gap-3">
                 <Button
                   onClick={handleSaveSettings}
                   disabled={isSavingSettings}
@@ -461,6 +461,126 @@ export function AdminPanel({ profile }: AdminPanelProps) {
                 >
                   {isSavingSettings ? 'Salvando...' : 'Salvar Configurações'}
                 </Button>
+              </div>
+
+              {/* Apps Script Code Helper */}
+              <div className="mt-8 pt-6 border-t border-white/5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-black uppercase tracking-wider text-pink-400">
+                    Código do Google Apps Script (Pasta Backstage + Subpasta da Festa)
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const code = `function doPost(e) {
+  try {
+    var data = JSON.parse(e.postData.contents);
+    var fileUrl = data.fileUrl;
+    var fileName = data.fileName || "arquivo";
+    var eventName = data.eventName || "Festa Geral";
+    var djName = data.djName || "DJ";
+
+    // 1. Localizar ou criar a pasta principal "Backstage"
+    var rootFolders = DriveApp.getFoldersByName("Backstage");
+    var backstageFolder;
+    if (rootFolders.hasNext()) {
+      backstageFolder = rootFolders.next();
+    } else {
+      backstageFolder = DriveApp.createFolder("Backstage");
+    }
+
+    // 2. Localizar ou criar a subpasta específica com o nome da Festa selecionada
+    var eventFolders = backstageFolder.getFoldersByName(eventName);
+    var targetFolder;
+    if (eventFolders.hasNext()) {
+      targetFolder = eventFolders.next();
+    } else {
+      targetFolder = backstageFolder.createFolder(eventName);
+    }
+
+    // 3. Baixar o arquivo da URL enviada
+    var response = UrlFetchApp.fetch(fileUrl);
+    var blob = response.getBlob();
+    blob.setName("[" + djName + "] " + fileName);
+
+    // 4. Salvar o arquivo dentro da subpasta da festa
+    var file = targetFolder.createFile(blob);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+    return ContentService.createTextOutput(JSON.stringify({
+      status: "success",
+      fileId: file.getId(),
+      url: file.getUrl()
+    })).setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({
+      status: "error",
+      message: err.toString()
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+}`;
+                      navigator.clipboard.writeText(code);
+                      toast.success("Código do Google Apps Script copiado!");
+                    }}
+                    className="h-8 rounded-xl text-[10px] uppercase font-black tracking-wider border-white/10 text-slate-300 hover:text-white"
+                  >
+                    Copiar Código
+                  </Button>
+                </div>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  Cole este código em seu projeto no <strong className="text-white">script.google.com</strong> e faça uma nova implantação como Web App (acesso: "Qualquer pessoa"). Ele criará automaticamente a pasta principal <strong>Backstage</strong> e, dentro dela, uma <strong>subpasta com o nome de cada festa</strong> para armazenar todos os arquivos dos DJs!
+                </p>
+                <pre className="bg-black/50 border border-white/10 rounded-2xl p-4 text-[11px] font-mono text-purple-300 overflow-x-auto max-h-52">
+{`function doPost(e) {
+  try {
+    var data = JSON.parse(e.postData.contents);
+    var fileUrl = data.fileUrl;
+    var fileName = data.fileName || "arquivo";
+    var eventName = data.eventName || "Festa Geral";
+    var djName = data.djName || "DJ";
+
+    // 1. Localizar ou criar a pasta principal "Backstage"
+    var rootFolders = DriveApp.getFoldersByName("Backstage");
+    var backstageFolder;
+    if (rootFolders.hasNext()) {
+      backstageFolder = rootFolders.next();
+    } else {
+      backstageFolder = DriveApp.createFolder("Backstage");
+    }
+
+    // 2. Localizar ou criar a subpasta específica com o nome da Festa selecionada
+    var eventFolders = backstageFolder.getFoldersByName(eventName);
+    var targetFolder;
+    if (eventFolders.hasNext()) {
+      targetFolder = eventFolders.next();
+    } else {
+      targetFolder = backstageFolder.createFolder(eventName);
+    }
+
+    // 3. Baixar o arquivo da URL enviada
+    var response = UrlFetchApp.fetch(fileUrl);
+    var blob = response.getBlob();
+    blob.setName("[" + djName + "] " + fileName);
+
+    // 4. Salvar o arquivo dentro da subpasta da festa
+    var file = targetFolder.createFile(blob);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+    return ContentService.createTextOutput(JSON.stringify({
+      status: "success",
+      fileId: file.getId(),
+      url: file.getUrl()
+    })).setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({
+      status: "error",
+      message: err.toString()
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+}`}
+                </pre>
               </div>
             </div>
           </div>

@@ -207,8 +207,8 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
               body: JSON.stringify({
                 fileUrl: downloadUrl,
                 fileName: file.name,
-                eventName: event?.name || 'Evento Desconhecido',
-                djName: djName || 'DJ'
+                eventName: 'Evento',
+                djName: asset?.name || 'DJ'
               })
             });
             
