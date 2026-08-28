@@ -22,6 +22,36 @@ interface OverviewProps {
   profile: UserProfile;
 }
 
+function renderTitleWithEmojis(text: string, gradientClasses: string) {
+  if (!text) return null;
+  const emojiRegex = /(\p{Extended_Pictographic}(?:\u200D\p{Extended_Pictographic})*|\p{Emoji_Presentation}|\p{Emoji}\uFE0F)/gu;
+  const parts = text.split(emojiRegex);
+  return parts.map((part, index) => {
+    if (!part) return null;
+    if (emojiRegex.test(part)) {
+      return (
+        <span 
+          key={index} 
+          className="inline-block not-italic [background-clip:unset] [-webkit-text-fill-color:initial] font-normal"
+          style={{ 
+            WebkitTextFillColor: 'initial', 
+            backgroundClip: 'unset', 
+            WebkitBackgroundClip: 'unset',
+            color: 'initial' 
+          }}
+        >
+          {part}
+        </span>
+      );
+    }
+    return (
+      <span key={index} className={gradientClasses}>
+        {part}
+      </span>
+    );
+  });
+}
+
 export function Overview({ event, profile }: OverviewProps) {
   const [arts, setArts] = useState<ArtTask[]>([]);
   const [payments, setPayments] = useState<PaymentItem[]>([]);
@@ -648,8 +678,8 @@ export function Overview({ event, profile }: OverviewProps) {
           </div>
           <div className="text-center md:text-left space-y-4 flex-1">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <h2 className="text-4xl md:text-5xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-white via-pink-100 to-slate-400">
-                {event.name}
+              <h2 className="text-4xl md:text-5xl font-black tracking-tighter">
+                {renderTitleWithEmojis(event.name, "text-transparent bg-clip-text bg-gradient-to-r from-white via-pink-100 to-slate-400")}
               </h2>
               <EventSelector profile={profile} editEvent={event} onEventUpdated={() => {}} isMinimal />
             </div>
