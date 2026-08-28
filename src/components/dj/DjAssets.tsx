@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { 
   Plus, Music, ExternalLink, Clock, Trash2, Loader2, Disc, 
   Calendar, ShieldAlert, BadgeCheck, Pencil, Film, Image, 
-  Sparkles, User, Share2, Upload, Paperclip, Palette, Zap, Users
+  Sparkles, User, Share2, Upload, Paperclip, Palette, Zap, Users,
+  Search, X
 } from "lucide-react";
 import { EventProject, UserProfile, DjAsset, ArtTask, DjAgency, DjLabel, OperationType } from "../../types";
 import { collection, query, onSnapshot, addDoc, serverTimestamp, deleteDoc, doc, getDocs, limit, updateDoc } from "firebase/firestore";
@@ -93,6 +94,9 @@ export function DjAssets({ event, profile, initialSelectedAssetId, onClearInitia
   const [viewMode, setViewMode] = useState<'grid' | 'calendar'>('grid');
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'completed'>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const searchInputRef = React.useRef<HTMLInputElement>(null);
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
   const [viewOpen, setViewOpen] = useState(false);
@@ -644,11 +648,25 @@ export function DjAssets({ event, profile, initialSelectedAssetId, onClearInitia
     }
   };
 
-  const filteredAssets = assets.filter(asset => {
-    const matchPriority = priorityFilter === 'all' || asset.priority === priorityFilter;
-    const matchStatus = statusFilter === 'all' || asset.presskitStatus === statusFilter;
-    return matchPriority && matchStatus;
-  });
+  const filteredAssets = assets
+    .filter(asset => {
+      const matchPriority = priorityFilter === 'all' || asset.priority === priorityFilter;
+      const matchStatus = statusFilter === 'all' || asset.presskitStatus === statusFilter;
+      
+      const query = searchQuery.trim().toLowerCase();
+      const matchSearch = !query || 
+        (asset.name && asset.name.toLowerCase().includes(query)) ||
+        (asset.dj2Name && asset.dj2Name.toLowerCase().includes(query)) ||
+        (asset.musicName && asset.musicName.toLowerCase().includes(query)) ||
+        (asset.dj2MusicName && asset.dj2MusicName.toLowerCase().includes(query));
+
+      return matchPriority && matchStatus && matchSearch;
+    })
+    .sort((a, b) => {
+      const nameA = (a.name || '').trim();
+      const nameB = (b.name || '').trim();
+      return nameA.localeCompare(nameB, 'pt-BR', { sensitivity: 'base', numeric: true });
+    });
 
   return (
     <div className="space-y-6 p-4 sm:p-6">
@@ -663,14 +681,72 @@ export function DjAssets({ event, profile, initialSelectedAssetId, onClearInitia
           </p>
         </div>
 
-        {/* Modal Adicionar / Editar DJ */}
-        <Dialog open={isOpen} onOpenChange={setIsOpen}>
-          <DialogTrigger render={
-            <Button onClick={handleOpenCreate} className="bg-gradient-to-tr from-purple-500 to-pink-500 text-white rounded-2xl h-12 px-6 border-none font-black transition-all hover:scale-[1.02] active:scale-95 shadow-[0_0_20px_rgba(168,85,247,0.3)] w-full sm:w-auto flex items-center justify-center gap-2">
-              <Plus className="w-4 h-4" />
-              Adicionar DJ / Atração
-            </Button>
-          } />
+        {/* Ações: Busca com Lupa Expansível + Botão Adicionar DJ */}
+        <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+          {/* Lupa / Caixa de Busca Expansível */}
+          <div className="flex items-center">
+            {isSearchOpen ? (
+              <div className="relative flex items-center w-full sm:w-72 transition-all duration-300 animate-in fade-in zoom-in-95">
+                <Search className="w-4 h-4 text-purple-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <Input
+                  ref={searchInputRef}
+                  type="text"
+                  placeholder="Buscar DJ pelo nome..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') {
+                      if (searchQuery) setSearchQuery('');
+                      else setIsSearchOpen(false);
+                    }
+                  }}
+                  className="pl-9.5 pr-9 h-12 rounded-2xl bg-white/5 border-purple-500/40 text-white placeholder:text-slate-500 text-xs font-semibold focus:border-purple-400 focus:ring-1 focus:ring-purple-400/50 w-full transition-all shadow-[0_0_15px_rgba(168,85,247,0.15)]"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setIsSearchOpen(false);
+                  }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-1 rounded-full hover:bg-white/10 transition-colors"
+                  title="Fechar busca (Esc)"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsSearchOpen(true);
+                  setTimeout(() => searchInputRef.current?.focus(), 50);
+                }}
+                className={cn(
+                  "w-12 h-12 rounded-2xl border flex items-center justify-center transition-all cursor-pointer shadow-md",
+                  searchQuery 
+                    ? "bg-purple-600/30 border-purple-500 text-purple-300 shadow-[0_0_15px_rgba(168,85,247,0.3)]" 
+                    : "bg-white/5 hover:bg-white/10 border-white/10 text-slate-300 hover:text-white hover:border-white/20 active:scale-95"
+                )}
+                title="Buscar DJ pelo nome"
+              >
+                <Search className="w-5 h-5 text-purple-400" />
+                {searchQuery && (
+                  <span className="absolute -top-1 -right-1 w-3 h-3 bg-pink-500 rounded-full animate-pulse" />
+                )}
+              </button>
+            )}
+          </div>
+
+          {/* Modal Adicionar / Editar DJ */}
+          <Dialog open={isOpen} onOpenChange={setIsOpen}>
+            <DialogTrigger render={
+              <Button onClick={handleOpenCreate} className="bg-gradient-to-tr from-purple-500 to-pink-500 text-white rounded-2xl h-12 px-6 border-none font-black transition-all hover:scale-[1.02] active:scale-95 shadow-[0_0_20px_rgba(168,85,247,0.3)] shrink-0 flex items-center justify-center gap-2">
+                <Plus className="w-4 h-4" />
+                <span className="hidden sm:inline">Adicionar DJ / Atração</span>
+                <span className="sm:hidden">Adicionar</span>
+              </Button>
+            } />
           <DialogContent className="rounded-[2rem] sm:max-w-[900px] w-[95vw] glass border-white/10 text-slate-100 p-4 sm:p-8 max-h-[94vh] overflow-hidden flex flex-col">
             <DialogHeader className="shrink-0 pb-4 border-b border-white/5">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -1018,9 +1094,11 @@ export function DjAssets({ event, profile, initialSelectedAssetId, onClearInitia
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        </div>
+      </div>
 
-        {/* Modal de Visualização Completa */}
-        <Dialog open={viewOpen} onOpenChange={setViewOpen}>
+      {/* Modal de Visualização Completa */}
+      <Dialog open={viewOpen} onOpenChange={setViewOpen}>
           <DialogContent className="rounded-[2rem] sm:max-w-[750px] w-[95vw] glass border-white/10 text-slate-100 p-4 sm:p-8 max-h-[92vh] overflow-hidden flex flex-col">
             <DialogHeader className="shrink-0 pb-4 border-b border-white/5">
               <div className="flex items-center justify-between">
@@ -1317,7 +1395,6 @@ export function DjAssets({ event, profile, initialSelectedAssetId, onClearInitia
             </DialogFooter>
           </DialogContent>
         </Dialog>
-      </div>
 
       {/* Controles de Visualização e Filtros */}
       <div className="bg-white/[0.02] border border-white/5 rounded-3xl p-4 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4 backdrop-blur-md">
@@ -1750,6 +1827,22 @@ export function DjAssets({ event, profile, initialSelectedAssetId, onClearInitia
               </Card>
             );
           })}
+
+          {filteredAssets.length === 0 && assets.length > 0 && (
+            <div className="col-span-full h-64 border-2 border-dashed border-white/10 rounded-[2.5rem] flex flex-col items-center justify-center space-y-3 text-slate-500 bg-white/5 p-6 text-center">
+              <Search className="w-10 h-10 opacity-30 text-purple-400" />
+              <p className="font-bold text-sm text-slate-300">Nenhum DJ encontrado para "{searchQuery}"</p>
+              <p className="text-xs text-slate-500">Tente buscar por outro termo ou limpe o campo de busca.</p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setSearchQuery('')}
+                className="rounded-xl border-white/10 bg-white/5 text-xs text-slate-300 hover:text-white mt-1"
+              >
+                Limpar Busca
+              </Button>
+            </div>
+          )}
 
           {assets.length === 0 && (
             <div className="col-span-full h-64 border-2 border-dashed border-white/5 rounded-[2.5rem] flex flex-col items-center justify-center space-y-4 text-slate-600 bg-white/5">
