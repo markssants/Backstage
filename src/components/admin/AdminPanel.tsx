@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { UserProfile, EventProject, OperationType, ViewType } from '../../types';
+import { UserProfile, EventProject, OperationType, ViewType, EventContractor } from '../../types';
 import { collection, query, onSnapshot, doc, setDoc, updateDoc, deleteDoc, serverTimestamp, getDocs, where } from 'firebase/firestore';
 import { db, handleFirestoreError } from '../../firebase';
+import { sanitizeForFirestore } from '../../lib/error-handler';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,7 +11,8 @@ import { Badge } from "@/components/ui/badge";
 import { 
   Users, Palette, Calendar, Shield, Trash2, Edit, Plus, Search, 
   UserCheck, MapPin, Mail, ExternalLink, Filter, HelpCircle, 
-  CheckCircle2, Clock, Check, RefreshCw, Layers, Sparkles, Settings
+  CheckCircle2, Clock, Check, RefreshCw, Layers, Sparkles, Settings,
+  Crown, ArrowUp, ArrowDown, Star
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -68,7 +70,8 @@ export function AdminPanel({ profile }: AdminPanelProps) {
     designerId: '',
     contractorEmail: '',
     designerEmail: '',
-    driveUrl: ''
+    driveUrl: '',
+    contractors: [] as EventContractor[]
   });
 
   // Load real-time data
@@ -206,6 +209,33 @@ export function AdminPanel({ profile }: AdminPanelProps) {
   // Event Assign Handlers
   const handleOpenEditEvent = (ev: EventProject) => {
     setSelectedEvent(ev);
+
+    let initialContractors: EventContractor[] = [];
+    if (Array.isArray(ev.contractors) && ev.contractors.length > 0) {
+      initialContractors = ev.contractors.map(c => ({
+        id: c.id && c.id !== 'unresolved' ? c.id : '',
+        name: c.name || '',
+        email: c.email || '',
+        phone: c.phone || '',
+        role: c.role || 'Contratante'
+      }));
+    } else if (ev.contractorName || ev.contractorEmail || (ev.contractorId && ev.contractorId !== 'unresolved')) {
+      const cUser = users.find(u => u.id === ev.contractorId);
+      initialContractors = [
+        {
+          id: ev.contractorId && ev.contractorId !== 'unresolved' ? ev.contractorId : '',
+          name: ev.contractorName || cUser?.name || '',
+          email: ev.contractorEmail || cUser?.email || '',
+          phone: '',
+          role: 'Produtor Principal'
+        }
+      ];
+    } else {
+      initialContractors = [
+        { id: '', name: '', email: '', phone: '', role: 'Produtor Geral' }
+      ];
+    }
+
     setEventForm({
       name: ev.name || '',
       city: ev.city || '',
@@ -215,33 +245,140 @@ export function AdminPanel({ profile }: AdminPanelProps) {
       designerId: ev.designerId || '',
       contractorEmail: ev.contractorEmail || '',
       designerEmail: ev.designerEmail || '',
-      driveUrl: ev.driveUrl || ''
+      driveUrl: ev.driveUrl || '',
+      contractors: initialContractors
     });
     setIsEventEditOpen(true);
+  };
+
+  const handleAddContractorToForm = () => {
+    setEventForm(prev => ({
+      ...prev,
+      contractors: [
+        ...prev.contractors,
+        { id: '', name: '', email: '', phone: '', role: prev.contractors.length === 1 ? 'Financeiro / Sócio' : 'Co-Produtor' }
+      ]
+    }));
+  };
+
+  const handleRemoveContractorFromForm = (index: number) => {
+    setEventForm(prev => {
+      if (prev.contractors.length <= 1) {
+        return {
+          ...prev,
+          contractors: [{ id: '', name: '', email: '', phone: '', role: 'Produtor Geral' }]
+        };
+      }
+      return {
+        ...prev,
+        contractors: prev.contractors.filter((_, i) => i !== index)
+      };
+    });
+  };
+
+  const handleContractorFieldChange = (index: number, field: keyof EventContractor, value: string) => {
+    setEventForm(prev => {
+      const nextContractors = [...prev.contractors];
+      nextContractors[index] = { ...nextContractors[index], [field]: value };
+      return { ...prev, contractors: nextContractors };
+    });
+  };
+
+  const handleSetAsPrincipal = (index: number) => {
+    setEventForm(prev => {
+      if (index === 0 || index >= prev.contractors.length) return prev;
+      const target = prev.contractors[index];
+      const remaining = prev.contractors.filter((_, i) => i !== index);
+      const updated = [
+        {
+          ...target,
+          role: target.role === 'Co-Produtor' || target.role === 'Co-Produtor / Sócio' ? 'Principal' : (target.role || 'Principal')
+        },
+        ...remaining
+      ];
+      return { ...prev, contractors: updated };
+    });
+    toast.success("Contratante definido como Principal!");
+  };
+
+  const handleMoveContractor = (index: number, direction: 'up' | 'down') => {
+    setEventForm(prev => {
+      const nextList = [...prev.contractors];
+      const targetIdx = direction === 'up' ? index - 1 : index + 1;
+      if (targetIdx < 0 || targetIdx >= nextList.length) return prev;
+      const temp = nextList[index];
+      nextList[index] = nextList[targetIdx];
+      nextList[targetIdx] = temp;
+      return { ...prev, contractors: nextList };
+    });
+  };
+
+  const handleLinkRegisteredContractor = (index: number, userId: string) => {
+    if (!userId || userId === 'unresolved' || userId === 'custom') {
+      handleContractorFieldChange(index, 'id', '');
+      return;
+    }
+    const foundUser = users.find(u => u.id === userId);
+    if (foundUser) {
+      setEventForm(prev => {
+        const nextContractors = [...prev.contractors];
+        nextContractors[index] = {
+          ...nextContractors[index],
+          id: foundUser.id,
+          name: nextContractors[index].name ? nextContractors[index].name : foundUser.name,
+          email: foundUser.email
+        };
+        return { ...prev, contractors: nextContractors };
+      });
+    }
   };
 
   const handleUpdateEventAssignment = async () => {
     if (!selectedEvent) return;
     try {
-      const selectedContractor = users.find(u => u.id === eventForm.contractorId);
       const selectedDesigner = users.find(u => u.id === eventForm.designerId);
 
-      const updatedPayload: Partial<EventProject> = {
-        name: eventForm.name,
-        city: eventForm.city,
-        location: eventForm.location,
+      // Clean and sanitize contractors
+      const validContractors = eventForm.contractors
+        .filter(c => (c.name && c.name.trim() !== '') || (c.email && c.email.trim() !== '') || (c.id && c.id.trim() !== ''))
+        .map(c => {
+          const item: EventContractor = {
+            name: (c.name || '').trim(),
+            email: (c.email || '').trim().toLowerCase(),
+            phone: (c.phone || '').trim(),
+            role: (c.role || '').trim() || 'Contratante'
+          };
+          if (c.id && c.id.trim() && c.id !== 'unresolved') {
+            item.id = c.id.trim();
+          }
+          return item;
+        });
+
+      const primaryContractor = validContractors[0] || { name: 'Pendente', email: '', role: 'Produtor' };
+      const contractorNameSummary = validContractors.map(c => c.name).filter(Boolean).join(', ') || 'Pendente';
+      
+      const contractorIdsList = Array.from(new Set(validContractors.map(c => c.id).filter(Boolean))) as string[];
+      const contractorEmailsList = Array.from(new Set(validContractors.map(c => c.email).filter(Boolean))) as string[];
+
+      const updatedPayload: Partial<EventProject> = sanitizeForFirestore({
+        name: eventForm.name.trim(),
+        city: eventForm.city.trim(),
+        location: eventForm.location.trim(),
         status: eventForm.status,
-        driveUrl: eventForm.driveUrl,
-        contractorId: eventForm.contractorId,
-        designerId: eventForm.designerId,
-        contractorEmail: selectedContractor ? selectedContractor.email : eventForm.contractorEmail,
-        designerEmail: selectedDesigner ? selectedDesigner.email : eventForm.designerEmail,
-        contractorName: selectedContractor ? selectedContractor.name : (eventForm.contractorId === 'unresolved' ? 'Pendente' : 'Usuário Externo'),
+        driveUrl: eventForm.driveUrl.trim(),
+        contractors: validContractors,
+        contractorIds: contractorIdsList,
+        contractorEmails: contractorEmailsList,
+        contractorId: primaryContractor.id || (contractorIdsList[0] || 'unresolved'),
+        contractorEmail: primaryContractor.email || (contractorEmailsList[0] || ''),
+        contractorName: primaryContractor.name || contractorNameSummary,
+        designerId: eventForm.designerId || 'unresolved',
+        designerEmail: selectedDesigner ? selectedDesigner.email : (eventForm.designerEmail || ''),
         updatedAt: serverTimestamp()
-      };
+      });
 
       await updateDoc(doc(db, 'events', selectedEvent.id), updatedPayload);
-      toast.success("Festa atualizada e vinculada com sucesso!");
+      toast.success("Festa e contratantes atualizados com sucesso!");
       setIsEventEditOpen(false);
     } catch (err) {
       toast.error("Erro ao atualizar o evento.");
@@ -1033,14 +1170,14 @@ export function AdminPanel({ profile }: AdminPanelProps) {
 
       {/* EVENT ASSIGN AND MANAGE FULL DIALOG */}
       <Dialog open={isEventEditOpen} onOpenChange={setIsEventEditOpen}>
-        <DialogContent className="rounded-[2rem] sm:max-w-lg glass border-white/10 text-slate-100 p-8 max-h-[85vh] overflow-y-auto">
+        <DialogContent className="rounded-[2rem] sm:max-w-2xl glass border-white/10 text-slate-100 p-6 sm:p-8 max-h-[90vh] overflow-y-auto custom-scrollbar">
           <DialogHeader>
             <DialogTitle className="text-2xl font-black text-white tracking-tight flex items-center gap-2">
               <Settings className="w-5 h-5 text-pink-500" />
               Gerenciar e Designar Festa
             </DialogTitle>
             <DialogDescription className="text-slate-400">
-              Modifique informações do evento e faça a vinculação direta de usuários do sistema.
+              Modifique informações do evento, gerencie os contratantes/sócios vinculados e atribua o designer responsável.
             </DialogDescription>
           </DialogHeader>
 
@@ -1092,35 +1229,253 @@ export function AdminPanel({ profile }: AdminPanelProps) {
               </div>
             </div>
 
-            {/* DESIGNATING CONTRACTOR DROPDOWN */}
-            <div className="space-y-2 border-t border-white/5 pt-4">
-              <div className="flex justify-between items-center">
-                <Label className="text-[10px] font-black tracking-widest uppercase text-slate-400">Vincular Contratante (Cliente)</Label>
-                {eventForm.contractorId === 'unresolved' && (
-                  <Badge className="bg-amber-500/10 text-amber-500 border border-amber-500/10 text-[9px] uppercase font-bold py-0.5">Pendente de Vínculo</Badge>
-                )}
+            {/* GERENCIAMENTO COMPLETO DE MÚLTIPLOS CONTRATANTES */}
+            <div className="space-y-4 border-t border-white/10 pt-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Label className="text-xs font-black tracking-widest uppercase text-pink-400 flex items-center gap-1.5">
+                      <Users className="w-4 h-4" /> Contratantes & Sócios do Evento
+                    </Label>
+                    <Badge className="bg-purple-500/20 text-purple-300 border border-purple-500/30 text-[10px] font-black px-2 py-0.5">
+                      {eventForm.contractors.length} {eventForm.contractors.length === 1 ? 'vinculado' : 'vinculados'}
+                    </Badge>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    Adicione, altere ou desvincule sócios e produtores com acesso administrativo total ao evento.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handleAddContractorToForm}
+                  className="bg-purple-600/30 hover:bg-purple-600 text-purple-200 hover:text-white border border-purple-500/40 rounded-xl text-xs font-bold gap-1.5 h-8 px-3 transition-all shrink-0 self-start sm:self-auto"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Adicionar Contratante
+                </Button>
               </div>
-              <select
-                value={eventForm.contractorId}
-                onChange={(e) => setEventForm({ ...eventForm, contractorId: e.target.value })}
-                className="bg-[#120b28] border border-white/10 text-white rounded-2xl p-3 w-full h-11 text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-pink-500"
-              >
-                <option value="unresolved">-- Não vinculado (Pendente) --</option>
-                {users.filter(u => u.role === 'contractor').map(c => (
-                  <option key={c.id} value={c.id}>
-                    {c.name} ({c.email})
-                  </option>
-                ))}
-              </select>
-              <div className="space-y-1">
-                <Label className="text-[9px] text-slate-500 font-mono">Email do Contratante de referência (usado para autovincular no login):</Label>
-                <Input
-                  type="text"
-                  placeholder="Email de segurança..."
-                  value={eventForm.contractorEmail}
-                  onChange={(e) => setEventForm({ ...eventForm, contractorEmail: e.target.value })}
-                  className="rounded-xl bg-white/5 border-white/10 text-white h-9 text-xs"
-                />
+
+              {/* Lista de Contratantes */}
+              <div className="space-y-3">
+                {eventForm.contractors.map((c, idx) => {
+                  const isPrimary = idx === 0;
+                  const currentRole = c.role || (isPrimary ? 'Principal' : 'Co-Produtor / Sócio');
+
+                  return (
+                    <div 
+                      key={idx} 
+                      className={`p-4 rounded-2xl border transition-all ${
+                        isPrimary 
+                          ? 'bg-gradient-to-b from-pink-500/[0.07] to-white/[0.02] border-pink-500/40 shadow-[0_0_15px_rgba(236,72,153,0.1)]' 
+                          : 'bg-white/[0.03] border-white/10 hover:border-purple-500/30'
+                      } space-y-3 relative group`}
+                    >
+                      {/* Header do Card com Status, Ações de Reordenação e Tornar Principal */}
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/5 pb-2.5">
+                        <div className="flex items-center gap-2">
+                          <span className={`w-5 h-5 rounded-full font-black text-xs flex items-center justify-center border ${
+                            isPrimary 
+                              ? 'bg-pink-500/20 text-pink-300 border-pink-500/40' 
+                              : 'bg-white/10 text-slate-400 border-white/10'
+                          }`}>
+                            {idx + 1}
+                          </span>
+                          <span className="text-xs font-bold text-slate-100">
+                            {c.name ? c.name : `Contratante #${idx + 1}`}
+                          </span>
+                          
+                          {/* Badge de Papel / Vínculo */}
+                          {isPrimary ? (
+                            <Badge className="bg-gradient-to-r from-pink-500/20 to-purple-500/20 text-pink-300 border border-pink-500/40 text-[9px] uppercase font-black py-0.5 flex items-center gap-1">
+                              <Crown className="w-3 h-3 text-amber-300 fill-amber-300/40" /> {c.role || 'Principal'}
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="bg-purple-500/10 text-purple-300 border-purple-500/20 text-[9px] uppercase font-bold py-0.5">
+                              {c.role || 'Co-Produtor / Sócio'}
+                            </Badge>
+                          )}
+
+                          {c.id && (
+                            <Badge className="bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-[9px] font-bold py-0 flex items-center gap-1">
+                              <UserCheck className="w-2.5 h-2.5" /> Conectado
+                            </Badge>
+                          )}
+                        </div>
+
+                        {/* Botões de Ação do Contratante */}
+                        <div className="flex items-center gap-1.5 ml-auto">
+                          {!isPrimary && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleSetAsPrincipal(idx)}
+                              className="h-7 text-[10px] bg-pink-500/10 hover:bg-pink-500/25 text-pink-300 hover:text-white border-pink-500/30 px-2 rounded-lg font-bold flex items-center gap-1 transition-all"
+                              title="Tornar este contratante o Principal do evento"
+                            >
+                              <Crown className="w-3 h-3 text-amber-400" />
+                              <span>Tornar Principal</span>
+                            </Button>
+                          )}
+
+                          {/* Reordenação */}
+                          {eventForm.contractors.length > 1 && (
+                            <div className="flex items-center bg-white/5 rounded-lg border border-white/10 p-0.5">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                disabled={idx === 0}
+                                onClick={() => handleMoveContractor(idx, 'up')}
+                                className="h-6 w-6 p-0 text-slate-400 hover:text-white disabled:opacity-20 disabled:hover:text-slate-400 rounded"
+                                title="Mover para cima"
+                              >
+                                <ArrowUp className="w-3 h-3" />
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                disabled={idx === eventForm.contractors.length - 1}
+                                onClick={() => handleMoveContractor(idx, 'down')}
+                                className="h-6 w-6 p-0 text-slate-400 hover:text-white disabled:opacity-20 disabled:hover:text-slate-400 rounded"
+                                title="Mover para baixo"
+                              >
+                                <ArrowDown className="w-3 h-3" />
+                              </Button>
+                            </div>
+                          )}
+
+                          {/* Remoção */}
+                          {eventForm.contractors.length > 1 && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleRemoveContractorFromForm(idx)}
+                              className="text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 h-7 w-7 p-0 rounded-lg transition-colors"
+                              title="Remover este contratante do evento"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Atalho para vincular a conta de usuário já registrada */}
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                            Vincular a Usuário Cadastrado no Sistema:
+                          </Label>
+                          {c.id && (
+                            <span className="text-[10px] text-emerald-400 font-mono">
+                              ID: {c.id.substring(0, 8)}...
+                            </span>
+                          )}
+                        </div>
+                        <select
+                          value={c.id || 'custom'}
+                          onChange={(e) => handleLinkRegisteredContractor(idx, e.target.value)}
+                          className="bg-[#120b28] border border-white/10 text-white rounded-xl px-3 py-2 w-full text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-pink-500"
+                        >
+                          <option value="custom">-- Sem conta vinculada / Preenchimento Manual --</option>
+                          {users.filter(u => u.role === 'contractor').map(u => (
+                            <option key={u.id} value={u.id}>
+                              {u.name} ({u.email})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Campos de dados do contratante */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <Label className="text-[10px] font-bold text-slate-400">Nome do Contratante / Sócio</Label>
+                          <Input
+                            type="text"
+                            placeholder="Ex: Pedro Henrique"
+                            value={c.name}
+                            onChange={(e) => handleContractorFieldChange(idx, 'name', e.target.value)}
+                            className="rounded-xl bg-white/5 border-white/10 text-white h-9 text-xs"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <Label className="text-[10px] font-bold text-slate-400">
+                            E-mail <span className="text-slate-500 font-normal">(autovincula no login)</span>
+                          </Label>
+                          <Input
+                            type="email"
+                            placeholder="exemplo@gmail.com"
+                            value={c.email || ''}
+                            onChange={(e) => handleContractorFieldChange(idx, 'email', e.target.value)}
+                            className="rounded-xl bg-white/5 border-white/10 text-white h-9 text-xs"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-[10px] font-bold text-slate-400">Classificação / Papel</Label>
+                            <span className="text-[9px] text-pink-400 font-mono">Tipo de Sócio</span>
+                          </div>
+                          <div className="flex gap-1.5">
+                            <select
+                              value={
+                                ['Principal', 'Co-Produtor / Sócio', 'Sócio Financeiro', 'Sócio Investidor', 'Produtor Artístico', 'Marketing / Divulgação'].includes(c.role || '')
+                                  ? (c.role || '')
+                                  : (isPrimary ? 'Principal' : 'custom')
+                              }
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                if (val === 'Principal') {
+                                  if (!isPrimary) {
+                                    handleSetAsPrincipal(idx);
+                                  } else {
+                                    handleContractorFieldChange(idx, 'role', 'Principal');
+                                  }
+                                } else if (val !== 'custom') {
+                                  handleContractorFieldChange(idx, 'role', val);
+                                }
+                              }}
+                              className="bg-[#120b28] border border-white/10 text-white rounded-xl px-2.5 py-1.5 w-full text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-pink-500"
+                            >
+                              <option value="Principal">👑 Principal</option>
+                              <option value="Co-Produtor / Sócio">🤝 Co-Produtor / Sócio</option>
+                              <option value="Sócio Financeiro">💰 Sócio Financeiro</option>
+                              <option value="Sócio Investidor">📈 Sócio Investidor</option>
+                              <option value="Produtor Artístico">🎵 Produtor Artístico</option>
+                              <option value="Marketing / Divulgação">📣 Marketing / Divulgação</option>
+                              <option value="custom">✏️ Personalizado (Digitar)</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        <div className="space-y-1">
+                          <Label className="text-[10px] font-bold text-slate-400">Função / Cargo (Texto Livre)</Label>
+                          <Input
+                            type="text"
+                            placeholder="Ex: Produtor Geral, Diretor, Co-Produtor..."
+                            value={c.role || ''}
+                            onChange={(e) => handleContractorFieldChange(idx, 'role', e.target.value)}
+                            className="rounded-xl bg-white/5 border-white/10 text-white h-9 text-xs"
+                          />
+                        </div>
+
+                        <div className="space-y-1 sm:col-span-2">
+                          <Label className="text-[10px] font-bold text-slate-400">Telefone / WhatsApp (opcional)</Label>
+                          <Input
+                            type="text"
+                            placeholder="Ex: (11) 99999-9999"
+                            value={c.phone || ''}
+                            onChange={(e) => handleContractorFieldChange(idx, 'phone', e.target.value)}
+                            className="rounded-xl bg-white/5 border-white/10 text-white h-9 text-xs"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 

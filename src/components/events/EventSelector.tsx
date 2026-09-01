@@ -15,7 +15,10 @@ import {
   User, 
   Check, 
   Copy,
-  MessageSquare
+  MessageSquare,
+  Crown,
+  ArrowUp,
+  ArrowDown
 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -115,6 +118,35 @@ export function EventSelector({ profile, onEventCreated, onEventUpdated, isMinim
       const copy = [...prev];
       copy[index] = { ...copy[index], [field]: value };
       return copy;
+    });
+  };
+
+  const handleSetAsPrincipal = (index: number) => {
+    setContractors(prev => {
+      if (index === 0 || index >= prev.length) return prev;
+      const target = prev[index];
+      const remaining = prev.filter((_, i) => i !== index);
+      const updated = [
+        {
+          ...target,
+          role: target.role === 'Co-Produtor' || target.role === 'Co-Produtor / Sócio' ? 'Principal' : (target.role || 'Principal')
+        },
+        ...remaining
+      ];
+      return updated;
+    });
+    toast.success("Contratante definido como Principal!");
+  };
+
+  const handleMoveContractor = (index: number, direction: 'up' | 'down') => {
+    setContractors(prev => {
+      const nextList = [...prev];
+      const targetIdx = direction === 'up' ? index - 1 : index + 1;
+      if (targetIdx < 0 || targetIdx >= nextList.length) return prev;
+      const temp = nextList[index];
+      nextList[index] = nextList[targetIdx];
+      nextList[targetIdx] = temp;
+      return nextList;
     });
   };
 
@@ -366,88 +398,183 @@ export function EventSelector({ profile, onEventCreated, onEventUpdated, isMinim
             </div>
 
             <div className="space-y-3 pt-1">
-              {contractors.map((c, idx) => (
-                <div 
-                  key={idx}
-                  className="bg-black/30 border border-white/10 rounded-2xl p-3.5 space-y-3 hover:border-purple-500/30 transition-all"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="w-5 h-5 rounded-full bg-purple-500/30 text-purple-300 text-[10px] font-black flex items-center justify-center">
-                        {idx + 1}
-                      </span>
-                      <span className="text-[11px] font-bold text-slate-200">
-                        {idx === 0 ? "Contratante Principal" : `Contratante ${idx + 1}`}
-                      </span>
-                      {c.id && (
-                        <span className="text-[9px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full font-bold">
-                          Conta Conectada
+              {contractors.map((c, idx) => {
+                const isPrimary = idx === 0;
+
+                return (
+                  <div 
+                    key={idx}
+                    className={`border rounded-2xl p-3.5 space-y-3 transition-all ${
+                      isPrimary
+                        ? 'bg-gradient-to-b from-purple-500/10 to-black/40 border-purple-500/40 shadow-[0_0_12px_rgba(168,85,247,0.1)]'
+                        : 'bg-black/30 border-white/10 hover:border-purple-500/30'
+                    }`}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/5 pb-2">
+                      <div className="flex items-center gap-2">
+                        <span className={`w-5 h-5 rounded-full text-[10px] font-black flex items-center justify-center border ${
+                          isPrimary 
+                            ? 'bg-purple-500/30 text-purple-300 border-purple-500/40' 
+                            : 'bg-white/10 text-slate-400 border-white/10'
+                        }`}>
+                          {idx + 1}
                         </span>
-                      )}
+                        <span className="text-[11px] font-bold text-slate-200">
+                          {c.name ? c.name : `Contratante #${idx + 1}`}
+                        </span>
+
+                        {isPrimary ? (
+                          <span className="text-[9px] bg-gradient-to-r from-pink-500/20 to-purple-500/20 text-pink-300 border border-pink-500/40 px-2 py-0.5 rounded-full font-black uppercase flex items-center gap-1">
+                            <Crown className="w-2.5 h-2.5 text-amber-300" /> {c.role || 'Principal'}
+                          </span>
+                        ) : (
+                          <span className="text-[9px] bg-white/5 text-slate-400 border border-white/10 px-2 py-0.5 rounded-full font-semibold">
+                            {c.role || 'Co-Produtor / Sócio'}
+                          </span>
+                        )}
+
+                        {c.id && (
+                          <span className="text-[9px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full font-bold">
+                            Conta Conectada
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-1.5 ml-auto">
+                        {!isPrimary && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleSetAsPrincipal(idx)}
+                            className="h-6 text-[9px] bg-pink-500/10 hover:bg-pink-500/25 text-pink-300 hover:text-white border-pink-500/30 px-2 rounded-lg font-bold flex items-center gap-1 transition-all"
+                            title="Tornar este contratante o Principal do evento"
+                          >
+                            <Crown className="w-2.5 h-2.5 text-amber-400" />
+                            <span>Tornar Principal</span>
+                          </Button>
+                        )}
+
+                        {contractors.length > 1 && (
+                          <div className="flex items-center bg-white/5 rounded-lg border border-white/10 p-0.5">
+                            <button
+                              type="button"
+                              disabled={idx === 0}
+                              onClick={() => handleMoveContractor(idx, 'up')}
+                              className="h-5 w-5 flex items-center justify-center text-slate-400 hover:text-white disabled:opacity-20 rounded"
+                              title="Mover para cima"
+                            >
+                              <ArrowUp className="w-2.5 h-2.5" />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={idx === contractors.length - 1}
+                              onClick={() => handleMoveContractor(idx, 'down')}
+                              className="h-5 w-5 flex items-center justify-center text-slate-400 hover:text-white disabled:opacity-20 rounded"
+                              title="Mover para baixo"
+                            >
+                              <ArrowDown className="w-2.5 h-2.5" />
+                            </button>
+                          </div>
+                        )}
+
+                        {contractors.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveContractor(idx)}
+                            className="text-slate-500 hover:text-rose-400 p-1 rounded-lg hover:bg-rose-500/10 transition-colors"
+                            title="Remover contratante"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
                     </div>
 
-                    {contractors.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveContractor(idx)}
-                        className="text-slate-500 hover:text-rose-400 p-1 rounded-lg hover:bg-rose-500/10 transition-colors"
-                        title="Remover contratante"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
+                    <div className="grid sm:grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <Label className="text-[9px] uppercase font-black tracking-widest text-slate-400 flex items-center gap-1">
+                          <User className="w-3 h-3 text-purple-400" /> Nome Completo
+                        </Label>
+                        <Input
+                          placeholder="Ex: João Silva"
+                          value={c.name}
+                          onChange={(e) => handleContractorChange(idx, 'name', e.target.value)}
+                          className="rounded-xl bg-white/5 border-white/10 text-white placeholder:text-slate-700 h-9 text-xs font-semibold focus:ring-purple-500"
+                        />
+                      </div>
 
-                  <div className="grid sm:grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <Label className="text-[9px] uppercase font-black tracking-widest text-slate-400 flex items-center gap-1">
-                        <User className="w-3 h-3 text-purple-400" /> Nome Completo
-                      </Label>
-                      <Input
-                        placeholder="Ex: João Silva"
-                        value={c.name}
-                        onChange={(e) => handleContractorChange(idx, 'name', e.target.value)}
-                        className="rounded-xl bg-white/5 border-white/10 text-white placeholder:text-slate-700 h-9 text-xs font-semibold focus:ring-purple-500"
-                      />
-                    </div>
+                      <div className="space-y-1">
+                        <Label className="text-[9px] uppercase font-black tracking-widest text-slate-400 flex items-center gap-1">
+                          <Briefcase className="w-3 h-3 text-purple-400" /> Classificação / Papel
+                        </Label>
+                        <select
+                          value={
+                            ['Principal', 'Co-Produtor / Sócio', 'Sócio Financeiro', 'Sócio Investidor', 'Produtor Artístico', 'Marketing / Divulgação'].includes(c.role || '')
+                              ? (c.role || '')
+                              : (isPrimary ? 'Principal' : 'custom')
+                          }
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val === 'Principal') {
+                              if (!isPrimary) {
+                                handleSetAsPrincipal(idx);
+                              } else {
+                                handleContractorChange(idx, 'role', 'Principal');
+                              }
+                            } else if (val !== 'custom') {
+                              handleContractorChange(idx, 'role', val);
+                            }
+                          }}
+                          className="bg-[#120b28] border border-white/10 text-white rounded-xl px-2.5 py-1.5 w-full text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-purple-500"
+                        >
+                          <option value="Principal">👑 Principal</option>
+                          <option value="Co-Produtor / Sócio">🤝 Co-Produtor / Sócio</option>
+                          <option value="Sócio Financeiro">💰 Sócio Financeiro</option>
+                          <option value="Sócio Investidor">📈 Sócio Investidor</option>
+                          <option value="Produtor Artístico">🎵 Produtor Artístico</option>
+                          <option value="Marketing / Divulgação">📣 Marketing / Divulgação</option>
+                          <option value="custom">✏️ Personalizado (Digitar)</option>
+                        </select>
+                      </div>
 
-                    <div className="space-y-1">
-                      <Label className="text-[9px] uppercase font-black tracking-widest text-slate-400 flex items-center gap-1">
-                        <Briefcase className="w-3 h-3 text-purple-400" /> Cargo / Função
-                      </Label>
-                      <Input
-                        placeholder="Ex: Produtor Geral, Financeiro..."
-                        value={c.role || ''}
-                        onChange={(e) => handleContractorChange(idx, 'role', e.target.value)}
-                        className="rounded-xl bg-white/5 border-white/10 text-white placeholder:text-slate-700 h-9 text-xs focus:ring-purple-500"
-                      />
-                    </div>
+                      <div className="space-y-1">
+                        <Label className="text-[9px] uppercase font-black tracking-widest text-slate-400 flex items-center gap-1">
+                          <Briefcase className="w-3 h-3 text-purple-400" /> Cargo / Função (Texto Livre)
+                        </Label>
+                        <Input
+                          placeholder="Ex: Produtor Geral, Financeiro..."
+                          value={c.role || ''}
+                          onChange={(e) => handleContractorChange(idx, 'role', e.target.value)}
+                          className="rounded-xl bg-white/5 border-white/10 text-white placeholder:text-slate-700 h-9 text-xs focus:ring-purple-500"
+                        />
+                      </div>
 
-                    <div className="space-y-1">
-                      <Label className="text-[9px] uppercase font-black tracking-widest text-slate-400 flex items-center gap-1">
-                        <Mail className="w-3 h-3 text-purple-400" /> Email (para login)
-                      </Label>
-                      <Input
-                        type="email"
-                        placeholder="email@cliente.com"
-                        value={c.email || ''}
-                        onChange={(e) => handleContractorChange(idx, 'email', e.target.value)}
-                        className="rounded-xl bg-white/5 border-white/10 text-white placeholder:text-slate-700 h-9 text-xs focus:ring-purple-500"
-                      />
-                    </div>
+                      <div className="space-y-1">
+                        <Label className="text-[9px] uppercase font-black tracking-widest text-slate-400 flex items-center gap-1">
+                          <Mail className="w-3 h-3 text-purple-400" /> Email (para login)
+                        </Label>
+                        <Input
+                          type="email"
+                          placeholder="email@cliente.com"
+                          value={c.email || ''}
+                          onChange={(e) => handleContractorChange(idx, 'email', e.target.value)}
+                          className="rounded-xl bg-white/5 border-white/10 text-white placeholder:text-slate-700 h-9 text-xs focus:ring-purple-500"
+                        />
+                      </div>
 
-                    <div className="space-y-1">
-                      <Label className="text-[9px] uppercase font-black tracking-widest text-slate-400 flex items-center gap-1">
-                        <Phone className="w-3 h-3 text-purple-400" /> Telefone / WhatsApp
-                      </Label>
-                      <Input
-                        placeholder="Ex: (11) 98765-4321"
-                        value={c.phone || ''}
-                        onChange={(e) => handleContractorChange(idx, 'phone', e.target.value)}
-                        className="rounded-xl bg-white/5 border-white/10 text-white placeholder:text-slate-700 h-9 text-xs focus:ring-purple-500"
-                      />
+                      <div className="space-y-1 sm:col-span-2">
+                        <Label className="text-[9px] uppercase font-black tracking-widest text-slate-400 flex items-center gap-1">
+                          <Phone className="w-3 h-3 text-purple-400" /> Telefone / WhatsApp
+                        </Label>
+                        <Input
+                          placeholder="Ex: (11) 98765-4321"
+                          value={c.phone || ''}
+                          onChange={(e) => handleContractorChange(idx, 'phone', e.target.value)}
+                          className="rounded-xl bg-white/5 border-white/10 text-white placeholder:text-slate-700 h-9 text-xs focus:ring-purple-500"
+                        />
+                      </div>
                     </div>
-                  </div>
 
                   {/* Share button per contractor when editing */}
                   {isEditing && editEvent && (
@@ -471,7 +598,8 @@ export function EventSelector({ profile, onEventCreated, onEventUpdated, isMinim
                     </div>
                   )}
                 </div>
-              ))}
+              );
+            })}
             </div>
           </div>
 
