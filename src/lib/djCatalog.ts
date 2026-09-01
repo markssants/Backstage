@@ -1,6 +1,7 @@
 import { collection, collectionGroup, doc, setDoc, getDocs, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { DjCatalogItem, DjAsset } from '../types';
+import { sanitizeForFirestore } from './error-handler';
 
 const LOCAL_STORAGE_CATALOG_KEY = 'beys_dj_catalog_cache_v2';
 
@@ -93,11 +94,11 @@ export async function saveDjToCatalog(djData: Partial<DjCatalogItem>) {
   // Sincroniza com o Firestore na coleção global de DJs
   try {
     const docRef = doc(db, 'djs_catalog', docId);
-    await setDoc(docRef, {
+    await setDoc(docRef, sanitizeForFirestore({
       ...cleanPayload,
       updatedAt: serverTimestamp(),
       lastUsedAt: serverTimestamp(),
-    }, { merge: true });
+    }), { merge: true });
   } catch (err) {
     console.warn("Não foi possível sincronizar DJ com o Firestore (usando cache local):", err);
   }

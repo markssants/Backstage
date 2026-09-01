@@ -5,6 +5,7 @@ import { Upload, Loader2, FileJson, CheckCircle2, AlertCircle, X, Download } fro
 import { UserProfile, OperationType } from "../../types";
 import { collection, addDoc, serverTimestamp, Timestamp } from "firebase/firestore";
 import { db, handleFirestoreError } from "../../firebase";
+import { sanitizeForFirestore } from "../../lib/error-handler";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -449,7 +450,7 @@ export function EventImporter({ profile, onEventImported, isMinimal = false }: E
         ? eventInfo.contractorIds
         : (eventInfo.contractorId && eventInfo.contractorId !== 'unresolved' ? [eventInfo.contractorId] : []);
 
-      const eventData = {
+      const eventData = sanitizeForFirestore({
         name: eventInfo.name,
         logoUrl: eventInfo.logoUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${eventInfo.name}`,
         driveUrl: eventInfo.driveUrl || '',
@@ -470,7 +471,7 @@ export function EventImporter({ profile, onEventImported, isMinimal = false }: E
         status: eventInfo.status || 'planning',
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
-      };
+      });
 
       // Create Event document
       const eventDocRef = await addDoc(collection(db, 'events'), eventData);
@@ -497,7 +498,7 @@ export function EventImporter({ profile, onEventImported, isMinimal = false }: E
           clean.amount = parseFloat(clean.amount) || 0;
         }
 
-        return clean;
+        return sanitizeForFirestore(clean);
       };
 
       // 2. Import subcollections sequentially or concurrently

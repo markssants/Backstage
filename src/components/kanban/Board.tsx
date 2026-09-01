@@ -7,6 +7,7 @@ import { Plus, GripVertical, MessageSquare, Clock, Calendar, Palette, MoreHorizo
 import { EventProject, UserProfile, ArtTask, OperationType, PendingChange, DjAsset } from "../../types";
 import { collection, query, onSnapshot, addDoc, updateDoc, doc, serverTimestamp, deleteDoc, orderBy, setDoc } from "firebase/firestore";
 import { db, handleFirestoreError } from "../../firebase";
+import { sanitizeForFirestore } from "../../lib/error-handler";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -367,7 +368,7 @@ export function KanbanBoard({ event, profile, onNavigateToDjAssets, initialSelec
       : 0;
 
     try {
-      await addDoc(collection(db, 'events', event.id, 'arts'), {
+      await addDoc(collection(db, 'events', event.id, 'arts'), sanitizeForFirestore({
         ...newArt,
         eventId: event.id,
         title: newArt.title.trim(),
@@ -378,7 +379,7 @@ export function KanbanBoard({ event, profile, onNavigateToDjAssets, initialSelec
         status: status,
         position: maxPosition + 1000, // Large gap for easier reordering if needed
         createdAt: serverTimestamp(),
-      });
+      }));
       setIsAddOpen(false);
       setNewArt({ 
         title: '', 
@@ -405,7 +406,7 @@ export function KanbanBoard({ event, profile, onNavigateToDjAssets, initialSelec
     try {
       if (profile.role === 'contractor') {
         // Register the pending change without modifying the live database document
-        const pendingChangeData = {
+        const pendingChangeData = sanitizeForFirestore({
           type: 'update',
           proposedData: {
             title: editArt.title || selectedArt.title,
@@ -429,19 +430,19 @@ export function KanbanBoard({ event, profile, onNavigateToDjAssets, initialSelec
           contractorEmail: profile.email,
           status: 'pending',
           createdAt: serverTimestamp()
-        };
+        });
         await addDoc(collection(db, 'events', event.id, 'pending_changes'), pendingChangeData);
         toast.info("Alteração salva e enviada para aprovação do designer!");
         setSelectedArt(null);
       } else {
-        await updateDoc(doc(db, 'events', event.id, 'arts', selectedArt.id), {
+        await updateDoc(doc(db, 'events', event.id, 'arts', selectedArt.id), sanitizeForFirestore({
           title: editArt.title || selectedArt.title,
           description: editArt.description || '',
           priority: editArt.priority || 'medium',
           category: editArt.category || 'dj',
           deadline: editArt.deadline || null,
           status: editArt.status || 'todo'
-        });
+        }));
         toast.success("Alterações salvas!");
         setSelectedArt(null);
       }
@@ -458,12 +459,12 @@ export function KanbanBoard({ event, profile, onNavigateToDjAssets, initialSelec
     setLoading(true);
     const path = `events/${event.id}/arts/${selectedArt.id}`;
     try {
-      await updateDoc(doc(db, 'events', event.id, 'arts', selectedArt.id), {
+      await updateDoc(doc(db, 'events', event.id, 'arts', selectedArt.id), sanitizeForFirestore({
         ...change.originalData,
         updatedAt: serverTimestamp()
-      });
+      }));
 
-      await addDoc(collection(db, 'events', event.id, 'pending_changes'), {
+      await addDoc(collection(db, 'events', event.id, 'pending_changes'), sanitizeForFirestore({
         type: 'revert',
         targetId: selectedArt.id,
         title: `Reversão direta de Atividade por ${profile.name}`,
@@ -484,7 +485,7 @@ export function KanbanBoard({ event, profile, onNavigateToDjAssets, initialSelec
           status: selectedArt.status || 'todo'
         },
         createdAt: serverTimestamp()
-      });
+      }));
 
       toast.success("Atividade revertida com sucesso para a versão antiga!");
       setSelectedArt(null);
@@ -500,7 +501,7 @@ export function KanbanBoard({ event, profile, onNavigateToDjAssets, initialSelec
     if (!selectedArt || !change.originalData) return;
     setLoading(true);
     try {
-      await addDoc(collection(db, 'events', event.id, 'pending_changes'), {
+      await addDoc(collection(db, 'events', event.id, 'pending_changes'), sanitizeForFirestore({
         type: 'revert',
         targetId: selectedArt.id,
         title: `Solicitação de Reversão de Atividade`,
@@ -521,7 +522,7 @@ export function KanbanBoard({ event, profile, onNavigateToDjAssets, initialSelec
           status: selectedArt.status || 'todo'
         },
         createdAt: serverTimestamp()
-      });
+      }));
 
       toast.success("Solicitação de reversão enviada para aprovação do designer mestre!");
       setSelectedArt(null);
@@ -656,7 +657,7 @@ export function KanbanBoard({ event, profile, onNavigateToDjAssets, initialSelec
       if (profile.role === 'contractor') {
         const artToMove = visibleArts.find(a => a.id === artId);
         if (artToMove) {
-          const pendingChangeData = {
+          const pendingChangeData = sanitizeForFirestore({
             type: 'status',
             proposedData: {
               status: newStatus
@@ -670,12 +671,12 @@ export function KanbanBoard({ event, profile, onNavigateToDjAssets, initialSelec
             contractorEmail: profile.email,
             status: 'pending',
             createdAt: serverTimestamp()
-          };
+          });
           await addDoc(collection(db, 'events', event.id, 'pending_changes'), pendingChangeData);
           toast.success("Status de coluna enviado para aprovação do designer!");
         }
       } else {
-        await updateDoc(doc(db, 'events', event.id, 'arts', artId), { status: newStatus });
+        await updateDoc(doc(db, 'events', event.id, 'arts', artId), sanitizeForFirestore({ status: newStatus }));
         toast.success("Status atualizado!");
       }
     } catch (err) {
@@ -691,7 +692,7 @@ export function KanbanBoard({ event, profile, onNavigateToDjAssets, initialSelec
       if (profile.role === 'contractor') {
         const artToDelete = visibleArts.find(a => a.id === artId);
         if (artToDelete) {
-          const pendingChangeData = {
+          const pendingChangeData = sanitizeForFirestore({
             type: 'delete',
             proposedData: null,
             originalData: artToDelete ? { title: artToDelete.title } : null,
@@ -701,7 +702,7 @@ export function KanbanBoard({ event, profile, onNavigateToDjAssets, initialSelec
             contractorEmail: profile.email,
             status: 'pending',
             createdAt: serverTimestamp()
-          };
+          });
           await addDoc(collection(db, 'events', event.id, 'pending_changes'), pendingChangeData);
           toast.info("Solicitação de exclusão enviada para aprovação do designer!");
           setSelectedArt(null);
@@ -909,7 +910,7 @@ export function KanbanBoard({ event, profile, onNavigateToDjAssets, initialSelec
         if (profile.role === 'contractor') {
           const artToMove = visibleArts.find(a => a.id === draggableId);
           if (artToMove) {
-            const pendingChangeData = {
+            const pendingChangeData = sanitizeForFirestore({
               type: 'update',
               proposedData: {
                 title: artToMove.title,
@@ -933,14 +934,14 @@ export function KanbanBoard({ event, profile, onNavigateToDjAssets, initialSelec
               contractorEmail: profile.email,
               status: 'pending',
               createdAt: serverTimestamp()
-            };
+            });
             await addDoc(collection(db, 'events', event.id, 'pending_changes'), pendingChangeData);
             toast.success(`Prazo proposto para ${format(parseISO(newDate), "dd/MM")} (aguardando aprovação)`);
           }
         } else {
-          await updateDoc(doc(db, 'events', event.id, 'arts', draggableId), {
+          await updateDoc(doc(db, 'events', event.id, 'arts', draggableId), sanitizeForFirestore({
             deadline: newDate
-          });
+          }));
           toast.success(`Prazo alterado para ${format(parseISO(newDate), "dd/MM")}`);
         }
       } catch (err) {
@@ -993,7 +994,7 @@ export function KanbanBoard({ event, profile, onNavigateToDjAssets, initialSelec
       if (profile.role === 'contractor') {
         const artToMove = visibleArts.find(a => a.id === draggableId);
         if (artToMove && artToMove.status !== destStatus) {
-          const pendingChangeData = {
+          const pendingChangeData = sanitizeForFirestore({
             type: 'status',
             proposedData: {
               status: destStatus,
@@ -1009,15 +1010,15 @@ export function KanbanBoard({ event, profile, onNavigateToDjAssets, initialSelec
             contractorEmail: profile.email,
             status: 'pending',
             createdAt: serverTimestamp()
-          };
+          });
           await addDoc(collection(db, 'events', event.id, 'pending_changes'), pendingChangeData);
           toast.success("Movimentação de coluna enviada para aprovação do designer!");
         }
       } else {
-        await updateDoc(doc(db, 'events', event.id, 'arts', draggableId), {
+        await updateDoc(doc(db, 'events', event.id, 'arts', draggableId), sanitizeForFirestore({
           status: destStatus,
           position: newPosition
-        });
+        }));
         // No toast here to keep it smooth
       }
     } catch (err) {

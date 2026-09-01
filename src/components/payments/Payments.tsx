@@ -11,6 +11,7 @@ import {
 import { EventProject, UserProfile, PaymentItem, OperationType, PaymentReceipt } from "../../types";
 import { collection, query, onSnapshot, addDoc, serverTimestamp, deleteDoc, doc, updateDoc } from "firebase/firestore";
 import { db, handleFirestoreError } from "../../firebase";
+import { sanitizeForFirestore } from "../../lib/error-handler";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -95,7 +96,7 @@ export function Payments({ event, profile }: { event: EventProject, profile: Use
         // If multiple installments, only attach receipt to the first one unless 1 installment
         const receiptToAttach = (i === 0 && newPayment.receipt) ? newPayment.receipt : null;
 
-        await addDoc(collection(db, path), {
+        await addDoc(collection(db, path), sanitizeForFirestore({
           description,
           amount: amountPerInstallment,
           dueDate,
@@ -106,14 +107,14 @@ export function Payments({ event, profile }: { event: EventProject, profile: Use
           receiptType: receiptToAttach?.type || null,
           receipts: receiptToAttach ? [{
             id: `receipt_${Date.now()}`,
-            url: receiptToAttach.url,
-            name: receiptToAttach.name,
-            type: receiptToAttach.type,
-            size: receiptToAttach.size,
+            url: receiptToAttach.url || '',
+            name: receiptToAttach.name || '',
+            type: receiptToAttach.type || '',
+            size: receiptToAttach.size || 0,
             uploadedAt: new Date()
           }] : [],
           createdAt: serverTimestamp(),
-        });
+        }));
       }
 
       setIsOpen(false);

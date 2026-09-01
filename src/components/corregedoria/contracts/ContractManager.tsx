@@ -32,6 +32,7 @@ import {
 import { toast } from "sonner";
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db, handleFirestoreError } from '../../../firebase';
+import { sanitizeForFirestore } from '../../../lib/error-handler';
 import { cn } from "@/lib/utils";
 
 interface ContractManagerProps {
@@ -200,7 +201,7 @@ export function ContractManager({ event, profile, onSavedToVault }: ContractMana
       const blob = new Blob([contractContent], { type: 'text/plain;charset=utf-8' });
       const blobUrl = URL.createObjectURL(blob);
 
-      await addDoc(collection(db, path), {
+      await addDoc(collection(db, path), sanitizeForFirestore({
         name: `${docName}.pdf`,
         url: blobUrl,
         type: 'contract',
@@ -210,7 +211,7 @@ export function ContractManager({ event, profile, onSavedToVault }: ContractMana
         contractData: formData,
         isCustom: activeTab === 'custom',
         createdAt: serverTimestamp(),
-      });
+      }));
 
       toast.success("Contrato armazenado no Cofre da Corregedoria!", { id: toastId });
       onSavedToVault?.();

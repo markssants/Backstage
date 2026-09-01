@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { db } from "../../firebase";
 import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, addDoc, deleteDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { UserProfile, EventProject, PendingChange } from "../../types";
+import { sanitizeForFirestore } from "../../lib/error-handler";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { 
@@ -314,11 +315,11 @@ export function PendingChangesManager({ profile, selectedEventId }: PendingChang
     try {
       const colRef = collection(db, 'events', selectedEventId, 'pending_changes');
       
-      await addDoc(colRef, {
+      await addDoc(colRef, sanitizeForFirestore({
         type: 'revert',
         targetId: change.targetId,
         title: `Solicitação de Reversão: ${change.title}`,
-        contractorName: profile.name,
+        contractorName: profile.name || '',
         contractorEmail: profile.email,
         status: 'pending',
         proposedData: {
@@ -328,7 +329,7 @@ export function PendingChangesManager({ profile, selectedEventId }: PendingChang
         },
         originalData: change.proposedData || null,
         createdAt: serverTimestamp()
-      });
+      }));
 
       toast.success("Solicitação de reversão enviada para aprovação do designer mestre!");
       setSelectedHistoryChange(null);

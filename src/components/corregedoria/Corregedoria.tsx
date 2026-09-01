@@ -5,6 +5,7 @@ import { Plus, Gavel, Download, Trash2, Loader2, Link as LinkIcon, ShieldCheck, 
 import { EventProject, UserProfile, ProjectDocument, OperationType } from "../../types";
 import { collection, query, onSnapshot, addDoc, serverTimestamp, deleteDoc, doc, updateDoc } from "firebase/firestore";
 import { db, handleFirestoreError } from "../../firebase";
+import { sanitizeForFirestore } from "../../lib/error-handler";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -58,11 +59,11 @@ export function Corregedoria({ event, profile }: { event: EventProject, profile:
     const path = `events/${event.id}/documents`;
     setLoading(true);
     try {
-      await addDoc(collection(db, path), {
+      await addDoc(collection(db, path), sanitizeForFirestore({
         ...newDoc,
         eventId: event.id,
         createdAt: serverTimestamp(),
-      });
+      }));
       setIsOpen(false);
       setNewDoc({ name: '', url: '', type: 'contract', status: 'pending', thumbnailUrl: '' });
       toast.success("Documento armazenado!");
@@ -80,14 +81,14 @@ export function Corregedoria({ event, profile }: { event: EventProject, profile:
     setLoading(true);
     try {
       const docRef = doc(db, path);
-      await updateDoc(docRef, {
+      await updateDoc(docRef, sanitizeForFirestore({
         name: editingDoc.name,
         url: editingDoc.url,
         type: editingDoc.type || 'contract',
         status: editingDoc.status || 'pending',
         thumbnailUrl: editingDoc.thumbnailUrl || null,
         updatedAt: serverTimestamp(),
-      });
+      }));
       setIsEditOpen(false);
       setEditingDoc(null);
       toast.success("Documento atualizado!");

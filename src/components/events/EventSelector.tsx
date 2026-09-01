@@ -27,6 +27,7 @@ import { ptBR } from "date-fns/locale";
 import { UserProfile, OperationType, EventProject, EventContractor } from "../../types";
 import { collection, addDoc, serverTimestamp, doc, updateDoc } from "firebase/firestore";
 import { db, handleFirestoreError } from "../../firebase";
+import { sanitizeForFirestore } from "../../lib/error-handler";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -79,7 +80,7 @@ export function EventSelector({ profile, onEventCreated, onEventUpdated, isMinim
       } else if (editEvent.contractorName || editEvent.contractorEmail) {
         setContractors([
           { 
-            id: editEvent.contractorId !== 'unresolved' ? editEvent.contractorId : undefined,
+            id: editEvent.contractorId && editEvent.contractorId !== 'unresolved' ? editEvent.contractorId : '',
             name: editEvent.contractorName || '', 
             email: editEvent.contractorEmail || '', 
             phone: '', 
@@ -123,14 +124,19 @@ export function EventSelector({ profile, onEventCreated, onEventUpdated, isMinim
     try {
       // Clean and sanitize contractors
       const validContractors = contractors
-        .filter(c => c.name.trim() !== '' || (c.email && c.email.trim() !== ''))
-        .map(c => ({
-          id: c.id || undefined,
-          name: c.name.trim(),
-          email: c.email?.trim().toLowerCase() || '',
-          phone: c.phone?.trim() || '',
-          role: c.role?.trim() || 'Contratante'
-        }));
+        .filter(c => (c.name && c.name.trim() !== '') || (c.email && c.email.trim() !== ''))
+        .map(c => {
+          const item: EventContractor = {
+            name: (c.name || '').trim(),
+            email: (c.email || '').trim().toLowerCase(),
+            phone: (c.phone || '').trim(),
+            role: (c.role || '').trim() || 'Contratante'
+          };
+          if (c.id && c.id.trim()) {
+            item.id = c.id.trim();
+          }
+          return item;
+        });
 
       // In case user didn't fill any contractor name, fallback
       const primaryContractor: EventContractor = validContractors[0] || { name: 'Pendente', email: '', role: 'Produtor' };
@@ -150,38 +156,38 @@ export function EventSelector({ profile, onEventCreated, onEventUpdated, isMinim
         }
       });
 
-      const eventData: any = {
-        name,
-        logoUrl: logoUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(name)}`,
-        driveUrl,
+      const eventData: any = sanitizeForFirestore({
+        name: name.trim(),
+        logoUrl: logoUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(name.trim())}`,
+        driveUrl: driveUrl || '',
         contractorName: primaryContractor.name || contractorNameSummary,
         contractors: validContractors,
         contractorEmails: contractorEmailsList,
         contractorIds: contractorIdsList,
-        city,
+        city: city || '',
         eventDate: date ? format(date, "PPP", { locale: ptBR }) : (editEvent?.eventDate || ''),
         djCount: parseInt(djCount) || 0,
         artCount: parseInt(artCount) || 0,
         motionCount: parseInt(motionCount) || 0,
-        location,
-        paymentValue,
+        location: location || '',
+        paymentValue: paymentValue || '',
         contractorEmail: primaryContractor.email || '',
-        designerEmail: profile.role === 'designer' ? profile.email : designerEmail,
+        designerEmail: profile.role === 'designer' ? (profile.email || '') : (designerEmail || ''),
         updatedAt: serverTimestamp(),
-      };
+      });
 
       if (isEditing && editEvent) {
         await updateDoc(doc(db, 'events', editEvent.id), eventData);
         onEventUpdated?.();
         toast.success("Evento e contratantes atualizados!");
       } else {
-        const createData = {
+        const createData = sanitizeForFirestore({
           ...eventData,
           contractorId: primaryContractor.id || (profile.role === 'contractor' ? profile.id : 'unresolved'),
           designerId: profile.role === 'designer' ? profile.id : 'unresolved',
           status: 'planning',
           createdAt: serverTimestamp(),
-        };
+        });
         const docRef = await addDoc(collection(db, 'events'), createData);
         onEventCreated?.(docRef.id);
         toast.success("Evento criado com sucesso!");

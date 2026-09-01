@@ -10,6 +10,7 @@ import {
 import { EventProject, UserProfile, DjAsset, ArtTask, DjAgency, DjLabel, OperationType, DjCatalogItem } from "../../types";
 import { collection, query, onSnapshot, addDoc, serverTimestamp, deleteDoc, doc, getDocs, limit, updateDoc } from "firebase/firestore";
 import { db, handleFirestoreError } from "../../firebase";
+import { sanitizeForFirestore } from "../../lib/error-handler";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -637,24 +638,19 @@ export function DjAssets({ event, profile, initialSelectedAssetId, onClearInitia
       };
 
       if (editingId) {
-        const updateData: any = {};
-        Object.entries(payload).forEach(([key, value]) => {
-          if (value !== undefined) {
-            updateData[key] = value;
-          }
-        });
-
-        await updateDoc(doc(db, 'events', event.id, 'dj_assets', editingId), {
-          ...updateData,
+        const updateData = sanitizeForFirestore({
+          ...payload,
           updatedAt: serverTimestamp(),
         });
+
+        await updateDoc(doc(db, 'events', event.id, 'dj_assets', editingId), updateData);
         toast.success(isVersus ? "Informações do Versus atualizadas com sucesso!" : "Informações do DJ atualizadas com sucesso!");
       } else {
-        const assetRef = await addDoc(collection(db, 'events', event.id, 'dj_assets'), {
+        const assetRef = await addDoc(collection(db, 'events', event.id, 'dj_assets'), sanitizeForFirestore({
           ...payload,
           eventId: event.id,
           createdAt: serverTimestamp(),
-        });
+        }));
 
         // Automatically create Art Task if deadline is set
         if (payload.artDeadline) {
@@ -668,7 +664,7 @@ export function DjAssets({ event, profile, initialSelectedAssetId, onClearInitia
             ? `Versus / B2B cadastrado via Presskits.\n\n--- DJ 1: ${payload.name} ---\nPresskit: ${payload.presskitUrl || '-'}\nFoto: ${payload.flyerPhoto || '-'}\nMúsica: ${payload.musicName || '-'}\n\n--- DJ 2: ${payload.dj2Name} ---\nPresskit: ${payload.dj2PresskitUrl || '-'}\nFoto: ${payload.dj2FlyerPhoto || '-'}\nMúsica: ${payload.dj2MusicName || '-'}`
             : `DJ cadastrado via Presskits.\n\nPresskit: ${payload.presskitUrl || 'Não informado'}\nAtração: ${payload.name}\nMúsica: ${payload.musicName || 'Não informada'}\nFoto p/ Flyer: ${payload.flyerPhoto || 'Não informada'}\nVídeo p/ Animação: ${payload.animationVideo || 'Não informado'}${payload.hasMandatoryLogo ? `\n\n⚠️ LOGO OBRIGATÓRIA:\nAgencia: ${payload.agencyInfo || '-'}\nGravadora: ${payload.labelInfo || '-'}` : ''}`;
 
-          await addDoc(collection(db, artsPath), {
+          await addDoc(collection(db, artsPath), sanitizeForFirestore({
             title: titleDisplay,
             description: descDisplay,
             priority: payload.priority || 'medium',
@@ -679,7 +675,7 @@ export function DjAssets({ event, profile, initialSelectedAssetId, onClearInitia
             eventId: event.id,
             createdAt: serverTimestamp(),
             sourceAssetId: assetRef.id
-          });
+          }));
           
           toast.info("Tarefa de arte criada automaticamente no quadro!");
         }
