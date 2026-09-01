@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { UserProfile, EventProject, OperationType, ViewType } from '../../types';
-import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
+import { collection, query, where, or, onSnapshot, orderBy } from 'firebase/firestore';
 import { db, auth, handleFirestoreError } from '../../firebase';
 import { Sidebar } from './Sidebar';
 import { MobileNavigation } from './MobileNavigation';
@@ -35,13 +35,25 @@ export function Dashboard({ profile }: DashboardProps) {
 
   useEffect(() => {
     const isAdmin = profile.email === 'beysarts@gmail.com';
-    const q = isAdmin 
-      ? query(collection(db, 'events'), orderBy('createdAt', 'desc'))
-      : query(
-          collection(db, 'events'),
-          where(profile.role === 'designer' ? 'designerId' : 'contractorId', '==', profile.id),
-          orderBy('createdAt', 'desc')
-        );
+    let q;
+    if (isAdmin) {
+      q = query(collection(db, 'events'), orderBy('createdAt', 'desc'));
+    } else if (profile.role === 'designer') {
+      q = query(
+        collection(db, 'events'),
+        where('designerId', '==', profile.id),
+        orderBy('createdAt', 'desc')
+      );
+    } else {
+      q = query(
+        collection(db, 'events'),
+        or(
+          where('contractorId', '==', profile.id),
+          where('contractorIds', 'array-contains', profile.id)
+        ),
+        orderBy('createdAt', 'desc')
+      );
+    }
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const eventList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as EventProject));

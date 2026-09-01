@@ -7,7 +7,7 @@ import {
   Sparkles, User, Share2, Upload, Paperclip, Palette, Zap, Users,
   Search, X
 } from "lucide-react";
-import { EventProject, UserProfile, DjAsset, ArtTask, DjAgency, DjLabel, OperationType } from "../../types";
+import { EventProject, UserProfile, DjAsset, ArtTask, DjAgency, DjLabel, OperationType, DjCatalogItem } from "../../types";
 import { collection, query, onSnapshot, addDoc, serverTimestamp, deleteDoc, doc, getDocs, limit, updateDoc } from "firebase/firestore";
 import { db, handleFirestoreError } from "../../firebase";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
@@ -19,6 +19,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { WaveformSelector } from './WaveformSelector';
 import { getDriveAccessToken, uploadFileToGoogleDrive, getGoogleDriveFileId, getOrRequestDriveToken } from '../../lib/googleDrive';
 import { DjFormSection } from './DjFormSection';
+import { saveDjToCatalog, subscribeToDjCatalog, registerDjsFromAssets } from '../../lib/djCatalog';
 
 interface DjAssetsProps {
   event: EventProject;
@@ -157,6 +158,110 @@ export function DjAssets({ event, profile, initialSelectedAssetId, onClearInitia
   // Waveform Modal State
   const [activeWaveformTarget, setActiveWaveformTarget] = useState<1 | 2>(1);
   const [isWaveformOpen, setIsWaveformOpen] = useState(false);
+
+  // Global DJ Catalog
+  const [djCatalog, setDjCatalog] = useState<DjCatalogItem[]>([]);
+
+  useEffect(() => {
+    const unsubscribe = subscribeToDjCatalog(setDjCatalog);
+    return () => unsubscribe();
+  }, []);
+
+  const handleSelectRegisteredDj = (djData: DjCatalogItem, djNumber: 1 | 2) => {
+    if (djNumber === 1) {
+      setDj1Name(djData.name);
+      setDj1PresskitUrl(djData.presskitUrl || '');
+      setDj1PresskitType(djData.presskitType || 'link');
+      setDj1HasMandatoryLogo(!!djData.hasMandatoryLogo);
+      setDj1Agencies(djData.agencies && djData.agencies.length > 0 ? djData.agencies : [{ name: djData.agencyInfo || '', link: '', type: 'link' }]);
+      setDj1HasRecordLabel(!!djData.hasRecordLabel || !!(djData.labels && djData.labels.length > 0));
+      setDj1Labels(djData.labels && djData.labels.length > 0 ? djData.labels : [{ name: djData.labelInfo || '', link: '', type: 'link' }]);
+      setDj1HasVisualMaterial(!!djData.hasVisualMaterial || !!djData.flyerPhoto || !!djData.animationVideo);
+      setDj1VisualMaterialType(djData.visualMaterialType || 'both');
+      setDj1FlyerPhoto(djData.flyerPhoto || '');
+      setDj1FlyerPhotoType(djData.flyerPhotoType || 'link');
+      setDj1AnimationVideo(djData.animationVideo || '');
+      setDj1AnimationVideoType(djData.animationVideoType || 'link');
+      setDj1HasPlaylist(!!djData.hasPlaylist || !!djData.musicName || !!djData.musicUrl);
+      setDj1MusicName(djData.musicName || '');
+      setDj1MusicUrl(djData.musicUrl || '');
+      setDj1MusicUrlType(djData.musicUrlType || 'link');
+      setDj1MusicDuration(djData.musicDuration || '');
+
+      if (djData.musicUrl && (djData.musicUrlType === 'file' || isUploadedFile(djData.musicUrl))) {
+        loadStoredAudioAsBlob(djData.musicUrl, setLocalMusicBlobUrl1);
+      }
+    } else {
+      setDj2Name(djData.name);
+      setDj2PresskitUrl(djData.presskitUrl || '');
+      setDj2PresskitType(djData.presskitType || 'link');
+      setDj2HasMandatoryLogo(!!djData.hasMandatoryLogo);
+      setDj2Agencies(djData.agencies && djData.agencies.length > 0 ? djData.agencies : [{ name: djData.agencyInfo || '', link: '', type: 'link' }]);
+      setDj2HasRecordLabel(!!djData.hasRecordLabel || !!(djData.labels && djData.labels.length > 0));
+      setDj2Labels(djData.labels && djData.labels.length > 0 ? djData.labels : [{ name: djData.labelInfo || '', link: '', type: 'link' }]);
+      setDj2HasVisualMaterial(!!djData.hasVisualMaterial || !!djData.flyerPhoto || !!djData.animationVideo);
+      setDj2VisualMaterialType(djData.visualMaterialType || 'both');
+      setDj2FlyerPhoto(djData.flyerPhoto || '');
+      setDj2FlyerPhotoType(djData.flyerPhotoType || 'link');
+      setDj2AnimationVideo(djData.animationVideo || '');
+      setDj2AnimationVideoType(djData.animationVideoType || 'link');
+      setDj2HasPlaylist(!!djData.hasPlaylist || !!djData.musicName || !!djData.musicUrl);
+      setDj2MusicName(djData.musicName || '');
+      setDj2MusicUrl(djData.musicUrl || '');
+      setDj2MusicUrlType(djData.musicUrlType || 'link');
+      setDj2MusicDuration(djData.musicDuration || '');
+
+      if (djData.musicUrl && (djData.musicUrlType === 'file' || isUploadedFile(djData.musicUrl))) {
+        loadStoredAudioAsBlob(djData.musicUrl, setLocalMusicBlobUrl2);
+      }
+    }
+
+    toast.success(`✨ Dados de ${djData.name} importados com sucesso do banco de dados!`);
+  };
+
+  const handleClearDjFields = (djNumber: 1 | 2) => {
+    if (djNumber === 1) {
+      setDj1Name('');
+      setDj1PresskitUrl('');
+      setDj1PresskitType('link');
+      setDj1HasMandatoryLogo(false);
+      setDj1Agencies([{ name: '', link: '', type: 'link' }]);
+      setDj1HasRecordLabel(false);
+      setDj1Labels([{ name: '', link: '', type: 'link' }]);
+      setDj1HasVisualMaterial(false);
+      setDj1VisualMaterialType('both');
+      setDj1FlyerPhoto('');
+      setDj1FlyerPhotoType('link');
+      setDj1AnimationVideo('');
+      setDj1AnimationVideoType('link');
+      setDj1HasPlaylist(false);
+      setDj1MusicName('');
+      setDj1MusicUrl('');
+      setDj1MusicUrlType('link');
+      setDj1MusicDuration('');
+      setLocalMusicBlobUrl1(null);
+    } else {
+      setDj2Name('');
+      setDj2PresskitUrl('');
+      setDj2PresskitType('link');
+      setDj2HasMandatoryLogo(false);
+      setDj2Agencies([{ name: '', link: '', type: 'link' }]);
+      setDj2HasRecordLabel(false);
+      setDj2Labels([{ name: '', link: '', type: 'link' }]);
+      setDj2HasVisualMaterial(false);
+      setDj2VisualMaterialType('both');
+      setDj2FlyerPhoto('');
+      setDj2FlyerPhotoType('link');
+      setDj2AnimationVideo('');
+      setDj2AnimationVideoType('link');
+      setDj2HasPlaylist(false);
+      setDj2MusicName('');
+      setDj2MusicUrl('');
+      setDj2MusicUrlType('link');
+      setDj2MusicDuration('');
+      setLocalMusicBlobUrl2(null);
+    }
+  };
 
   // Upload Tracking
   const [uploadingState, setUploadingState] = useState<Record<string, boolean>>({});
@@ -309,7 +414,13 @@ export function DjAssets({ event, profile, initialSelectedAssetId, onClearInitia
   useEffect(() => {
     const q = query(collection(db, 'events', event.id, 'dj_assets'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setAssets(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as DjAsset)));
+      const loaded = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as DjAsset));
+      setAssets(loaded);
+      try {
+        registerDjsFromAssets(loaded);
+      } catch (err) {
+        console.warn("Erro ao registrar assets no catálogo:", err);
+      }
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, `events/${event.id}/dj_assets`);
     });
@@ -573,6 +684,58 @@ export function DjAssets({ event, profile, initialSelectedAssetId, onClearInitia
           toast.info("Tarefa de arte criada automaticamente no quadro!");
         }
         toast.success(isVersus ? "Atração Versus adicionada com sucesso!" : "DJ adicionado com sucesso!");
+      }
+
+      // Sincroniza os DJs cadastrados com o Catálogo Global
+      try {
+        if (payload.name && payload.name.trim()) {
+          saveDjToCatalog({
+            name: payload.name,
+            presskitUrl: payload.presskitUrl || '',
+            presskitType: payload.presskitType || 'link',
+            presskitStatus: payload.presskitStatus || 'pending',
+            hasMandatoryLogo: !!payload.hasMandatoryLogo,
+            agencies: payload.agencies || [],
+            hasRecordLabel: dj1HasRecordLabel,
+            labels: payload.labels || [],
+            hasVisualMaterial: !!(payload.flyerPhoto || payload.animationVideo),
+            visualMaterialType: payload.visualMaterialType || 'both',
+            flyerPhoto: payload.flyerPhoto || '',
+            flyerPhotoType: payload.flyerPhotoType || 'link',
+            animationVideo: payload.animationVideo || '',
+            animationVideoType: payload.animationVideoType || 'link',
+            hasPlaylist: !!(payload.musicName || payload.musicUrl),
+            musicName: payload.musicName || '',
+            musicUrl: payload.musicUrl || '',
+            musicUrlType: payload.musicUrlType || 'link',
+            musicDuration: payload.musicDuration || '',
+          });
+        }
+        if (payload.isVersus && payload.dj2Name && payload.dj2Name.trim()) {
+          saveDjToCatalog({
+            name: payload.dj2Name,
+            presskitUrl: payload.dj2PresskitUrl || '',
+            presskitType: payload.dj2PresskitType || 'link',
+            presskitStatus: payload.dj2PresskitUrl ? 'completed' : 'pending',
+            hasMandatoryLogo: !!payload.dj2HasMandatoryLogo,
+            agencies: payload.dj2Agencies || [],
+            hasRecordLabel: dj2HasRecordLabel,
+            labels: payload.dj2Labels || [],
+            hasVisualMaterial: !!(payload.dj2FlyerPhoto || payload.dj2AnimationVideo),
+            visualMaterialType: payload.dj2VisualMaterialType || 'both',
+            flyerPhoto: payload.dj2FlyerPhoto || '',
+            flyerPhotoType: payload.dj2FlyerPhotoType || 'link',
+            animationVideo: payload.dj2AnimationVideo || '',
+            animationVideoType: payload.dj2AnimationVideoType || 'link',
+            hasPlaylist: !!(payload.dj2MusicName || payload.dj2MusicUrl),
+            musicName: payload.dj2MusicName || '',
+            musicUrl: payload.dj2MusicUrl || '',
+            musicUrlType: payload.dj2MusicUrlType || 'link',
+            musicDuration: payload.dj2MusicDuration || '',
+          });
+        }
+      } catch (catErr) {
+        console.warn("Erro ao sincronizar com o catálogo global:", catErr);
       }
 
       setIsOpen(false);
@@ -863,6 +1026,9 @@ export function DjAssets({ event, profile, initialSelectedAssetId, onClearInitia
                   theme="purple"
                   djName={dj1Name}
                   onDjNameChange={setDj1Name}
+                  catalog={djCatalog}
+                  onSelectRegisteredDj={(dj) => handleSelectRegisteredDj(dj, 1)}
+                  onClearDjFields={() => handleClearDjFields(1)}
                   presskitUrl={dj1PresskitUrl}
                   presskitType={dj1PresskitType}
                   onPresskitChange={(url, type) => {
@@ -927,6 +1093,9 @@ export function DjAssets({ event, profile, initialSelectedAssetId, onClearInitia
                   theme="pink"
                   djName={dj2Name}
                   onDjNameChange={setDj2Name}
+                  catalog={djCatalog}
+                  onSelectRegisteredDj={(dj) => handleSelectRegisteredDj(dj, 2)}
+                  onClearDjFields={() => handleClearDjFields(2)}
                   presskitUrl={dj2PresskitUrl}
                   presskitType={dj2PresskitType}
                   onPresskitChange={(url, type) => {

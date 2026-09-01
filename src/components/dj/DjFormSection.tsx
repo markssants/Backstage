@@ -1,15 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { 
   User, Sparkles, Upload, Loader2, Paperclip, Trash2, 
-  ShieldAlert, Disc, Image, Film, Music, Clock
+  ShieldAlert, Disc, Image, Film, Music, Clock, Database, Check,
+  FolderArchive, Video, Building2, Tag, ArrowRight, RotateCcw
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "motion/react";
-import { DjAgency, DjLabel } from "../../types";
+import { DjAgency, DjLabel, DjCatalogItem } from "../../types";
+import { searchDjCatalog } from "../../lib/djCatalog";
 
 interface DjFormSectionProps {
   djNumber: 1 | 2;
@@ -18,6 +20,11 @@ interface DjFormSectionProps {
   djName: string;
   onDjNameChange: (val: string) => void;
   
+  // Catálogo de DJs e preenchimento automático
+  catalog?: DjCatalogItem[];
+  onSelectRegisteredDj?: (dj: DjCatalogItem) => void;
+  onClearDjFields?: () => void;
+
   presskitUrl: string;
   presskitType: 'link' | 'file' | 'email';
   onPresskitChange: (url: string, type: 'link' | 'file' | 'email') => void;
@@ -98,6 +105,9 @@ export function DjFormSection({
   theme = 'purple',
   djName,
   onDjNameChange,
+  catalog = [],
+  onSelectRegisteredDj,
+  onClearDjFields,
   presskitUrl,
   presskitType,
   onPresskitChange,
@@ -134,16 +144,83 @@ export function DjFormSection({
   uploadProgress,
   onFileUpload,
   onOpenWaveform,
+  fieldPrefixDir = '',
   fieldPrefix = ''
-}: DjFormSectionProps) {
+}: DjFormSectionProps & { fieldPrefixDir?: string }) {
   const [durationMode, setDurationMode] = useState<'time' | 'visual'>(
     musicUrlType === 'file' ? 'visual' : 'time'
   );
+  
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [loadedFromDbName, setLoadedFromDbName] = useState<string | null>(null);
+  const [highlightedIndex, setHighlightedIndex] = useState<number>(-1);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
 
-  const presskitKey = `${fieldPrefix}presskit`;
-  const flyerPhotoKey = `${fieldPrefix}flyerPhoto`;
-  const animationVideoKey = `${fieldPrefix}animationVideo`;
-  const musicKey = `${fieldPrefix}musicUrl`;
+  const matchedDjs = useMemo(() => {
+    return searchDjCatalog(djName, catalog);
+  }, [djName, catalog]);
+
+  // Reseta o índice destacado quando as sugestões mudam
+  useEffect(() => {
+    setHighlightedIndex(-1);
+  }, [matchedDjs]);
+
+  // Fecha o dropdown de sugestões ao clicar fora
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
+        setShowSuggestions(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleSelectSuggestion = (dj: DjCatalogItem) => {
+    if (onSelectRegisteredDj) {
+      onSelectRegisteredDj(dj);
+    } else {
+      onDjNameChange(dj.name);
+    }
+    setLoadedFromDbName(dj.name);
+    setShowSuggestions(false);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showSuggestions || matchedDjs.length === 0) {
+      if (e.key === 'ArrowDown' && matchedDjs.length > 0) {
+        setShowSuggestions(true);
+        setHighlightedIndex(0);
+        e.preventDefault();
+      }
+      return;
+    }
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlightedIndex(prev => (prev < matchedDjs.length - 1 ? prev + 1 : 0));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlightedIndex(prev => (prev > 0 ? prev - 1 : matchedDjs.length - 1));
+    } else if (e.key === 'Enter') {
+      if (highlightedIndex >= 0 && highlightedIndex < matchedDjs.length) {
+        e.preventDefault();
+        handleSelectSuggestion(matchedDjs[highlightedIndex]);
+      }
+    } else if (e.key === 'Escape') {
+      setShowSuggestions(false);
+    }
+  };
+
+  const presskitKeyOk = `${fieldPrefix}presskit`;
+  const flyerPhotoKeyOk = `${fieldPrefix}flyerPhoto`;
+  const animationVideoKeyOk = `${fieldPrefix}animationVideo`;
+  const musicKeyOk = `${fieldPrefix}musicUrl`;
+
+  const presskitKey = presskitKeyOk;
+  const flyerPhotoKey = flyerPhotoKeyOk;
+  const animationVideoKey = animationVideoKeyOk;
+  const musicKey = musicKeyOk;
 
   const isPink = theme === 'pink';
 
@@ -189,16 +266,201 @@ export function DjFormSection({
           </span>
         </div>
         
-        <div className="space-y-2">
-          <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400 flex items-center gap-1">
-            Nome do DJ / Atração {djNumber} <span className="text-pink-500 font-bold">*</span>
-          </Label>
-          <Input 
-            value={djName} 
-            onChange={e => onDjNameChange(e.target.value)} 
-            placeholder={`Ex: DJ ${djNumber === 1 ? 'Alok' : 'Vintage Culture'}`} 
-            className="rounded-2xl bg-white/5 border-white/10 text-white h-12 text-sm font-bold" 
-          />
+        {/* Campo com Autocomplete do Banco de Dados */}
+        <div className="space-y-2 relative" ref={searchContainerRef}>
+          <div className="flex items-center justify-between">
+            <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400 flex items-center gap-1">
+              Nome do DJ / Atração {djNumber} <span className="text-pink-500 font-bold">*</span>
+            </Label>
+            
+            {matchedDjs.length > 0 && djName.trim().length > 0 && !loadedFromDbName && (
+              <span className="text-[9px] font-black uppercase tracking-widest text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-md flex items-center gap-1 animate-pulse">
+                <Database className="w-3 h-3" />
+                {matchedDjs.length} cadastrado(s) no DB
+              </span>
+            )}
+          </div>
+
+          <div className="relative">
+            <Input 
+              value={djName} 
+              onChange={e => {
+                onDjNameChange(e.target.value);
+                setShowSuggestions(true);
+                if (loadedFromDbName && e.target.value.trim() !== loadedFromDbName) {
+                  setLoadedFromDbName(null);
+                }
+              }} 
+              onFocus={() => {
+                if (matchedDjs.length > 0) setShowSuggestions(true);
+              }}
+              onKeyDown={handleKeyDown}
+              autoComplete="off"
+              spellCheck={false}
+              placeholder={`Ex: DJ ${djNumber === 1 ? 'Alok' : 'Vintage Culture'}`} 
+              className={cn(
+                "rounded-2xl bg-white/5 border-white/10 text-white h-12 text-sm font-bold transition-all pr-10",
+                matchedDjs.length > 0 && djName.trim().length > 0 && "border-purple-500/40 shadow-[0_0_15px_rgba(168,85,247,0.15)]"
+              )}
+            />
+            {matchedDjs.length > 0 && djName.trim().length > 0 && (
+              <button
+                type="button"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  setShowSuggestions(prev => !prev);
+                }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-purple-400 hover:text-pink-400 transition-colors p-1"
+                title="Ver atrações cadastradas no banco de dados"
+              >
+                <Database className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+
+          {/* Banner quando dados foram carregados do DB */}
+          {loadedFromDbName && (
+            <motion.div 
+              initial={{ opacity: 0, y: -5 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="p-2.5 rounded-xl bg-gradient-to-r from-emerald-500/15 via-purple-500/10 to-transparent border border-emerald-500/30 flex items-center justify-between gap-3 text-xs"
+            >
+              <div className="flex items-center gap-2 text-emerald-300">
+                <Sparkles className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span className="font-bold">
+                  Dados de <strong>{loadedFromDbName}</strong> puxados automaticamente do Banco de Dados!
+                </span>
+              </div>
+              {onClearDjFields && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClearDjFields();
+                    setLoadedFromDbName(null);
+                  }}
+                  className="text-[10px] text-slate-400 hover:text-rose-400 font-bold uppercase tracking-widest flex items-center gap-1 transition-colors bg-white/5 px-2 py-1 rounded-lg border border-white/10 shrink-0"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  Limpar
+                </button>
+              )}
+            </motion.div>
+          )}
+
+          {/* Dropdown Flutuante de Sugestões de DJs Cadastrados */}
+          <AnimatePresence>
+            {showSuggestions && matchedDjs.length > 0 && djName.trim().length > 0 && (
+              <motion.div 
+                initial={{ opacity: 0, y: 8, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 4, scale: 0.98 }}
+                transition={{ duration: 0.15 }}
+                className="absolute z-50 left-0 right-0 top-full mt-2 bg-[#120a26]/95 backdrop-blur-2xl border border-purple-500/40 rounded-2xl shadow-[0_15px_40px_rgba(0,0,0,0.8)] overflow-hidden"
+              >
+                <div className="p-3 bg-gradient-to-r from-purple-900/50 to-pink-900/40 border-b border-white/10 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Database className="w-3.5 h-3.5 text-purple-400" />
+                    <span className="text-[10px] uppercase font-black tracking-widest text-purple-200">
+                      DJs Cadastrados no Banco de Dados
+                    </span>
+                  </div>
+                  <span className="text-[9px] text-purple-300 font-bold bg-white/10 px-2 py-0.5 rounded-full">
+                    {matchedDjs.length} {matchedDjs.length === 1 ? 'resultado' : 'resultados'} (Clique para puxar)
+                  </span>
+                </div>
+
+                <div className="max-h-72 overflow-y-auto p-2 space-y-1.5 custom-scrollbar">
+                  {matchedDjs.map((dj, idx) => {
+                    const isSelected = highlightedIndex === idx;
+                    return (
+                      <div
+                        key={dj.id || idx}
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleSelectSuggestion(dj);
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleSelectSuggestion(dj);
+                        }}
+                        className={cn(
+                          "group cursor-pointer p-3 rounded-xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-2.5",
+                          isSelected
+                            ? "bg-gradient-to-r from-purple-600/30 to-pink-600/30 border-purple-500 shadow-md"
+                            : "bg-white/[0.03] hover:bg-gradient-to-r hover:from-purple-600/20 hover:to-pink-600/20 border-white/5 hover:border-purple-500/40"
+                        )}
+                      >
+                        <div className="space-y-1.5 flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-lg bg-gradient-to-tr from-purple-500 to-pink-500 flex items-center justify-center text-white shrink-0 shadow-md">
+                              <Disc className="w-3.5 h-3.5" />
+                            </div>
+                            <span className="text-sm font-black text-white group-hover:text-pink-300 transition-colors truncate">
+                              {dj.name}
+                            </span>
+                            {dj.presskitUrl && (
+                              <span className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded">
+                                Presskit OK
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Badges dos dados disponíveis no cadastro */}
+                          <div className="flex flex-wrap items-center gap-1.5 text-[9px] text-slate-300">
+                            {dj.presskitUrl && (
+                              <span className="bg-white/5 border border-white/10 px-1.5 py-0.5 rounded flex items-center gap-1">
+                                <FolderArchive className="w-2.5 h-2.5 text-purple-400" />
+                                {dj.presskitType === 'email' ? 'E-mail' : dj.presskitType === 'file' ? '.zip' : 'Link'}
+                              </span>
+                            )}
+                            {dj.flyerPhoto && (
+                              <span className="bg-white/5 border border-white/10 px-1.5 py-0.5 rounded flex items-center gap-1">
+                                <Image className="w-2.5 h-2.5 text-pink-400" />
+                                Foto Flyer
+                              </span>
+                            )}
+                            {dj.animationVideo && (
+                              <span className="bg-white/5 border border-white/10 px-1.5 py-0.5 rounded flex items-center gap-1">
+                                <Video className="w-2.5 h-2.5 text-blue-400" />
+                                Vídeo Motion
+                              </span>
+                            )}
+                            {dj.musicName && (
+                              <span className="bg-white/5 border border-white/10 px-1.5 py-0.5 rounded flex items-center gap-1 truncate max-w-[140px]">
+                                <Music className="w-2.5 h-2.5 text-amber-400" />
+                                {dj.musicName}
+                              </span>
+                            )}
+                            {dj.agencies && dj.agencies.length > 0 && dj.agencies.some(a => a.name) && (
+                              <span className="bg-white/5 border border-white/10 px-1.5 py-0.5 rounded flex items-center gap-1">
+                                <Building2 className="w-2.5 h-2.5 text-indigo-400" />
+                                {dj.agencies.filter(a => a.name).length} Agência(s)
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <Button
+                          type="button"
+                          size="sm"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleSelectSuggestion(dj);
+                          }}
+                          className="h-8 text-[9px] font-black uppercase tracking-widest px-3 bg-purple-600 hover:bg-pink-600 text-white rounded-lg shadow-md group-hover:scale-105 transition-all flex items-center gap-1 shrink-0"
+                        >
+                          Puxar Dados
+                          <ArrowRight className="w-3 h-3" />
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
         
         <div className="space-y-3">

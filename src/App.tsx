@@ -68,20 +68,62 @@ export default function App() {
                 currentProfile = newProfile;
               }
               
-              await updateDoc(doc(db, 'events', inviteEventId), {
-                contractorId: user.uid,
-                contractorEmail: user.email || ''
-              });
+              const eventDoc = await getDoc(doc(db, 'events', inviteEventId));
+              if (eventDoc.exists()) {
+                const eventData = eventDoc.data();
+                const existingContractors = Array.isArray(eventData.contractors) ? eventData.contractors : [];
+                const existingContractorIds: string[] = Array.isArray(eventData.contractorIds) 
+                  ? eventData.contractorIds 
+                  : (eventData.contractorId && eventData.contractorId !== 'unresolved' ? [eventData.contractorId] : []);
+                const existingContractorEmails: string[] = Array.isArray(eventData.contractorEmails)
+                  ? eventData.contractorEmails
+                  : (eventData.contractorEmail ? [eventData.contractorEmail] : []);
+
+                const updatedContractorIds = Array.from(new Set([...existingContractorIds, user.uid]));
+                const updatedContractorEmails = Array.from(new Set([...existingContractorEmails, user.email || ''].filter(Boolean)));
+                
+                // Add or update this contractor entry in the contractors list
+                const alreadyInList = existingContractors.some((c: any) => c.id === user.uid || (user.email && c.email === user.email));
+                let updatedContractors = [...existingContractors];
+                if (!alreadyInList) {
+                  updatedContractors.push({
+                    id: user.uid,
+                    name: user.displayName || 'Contratante',
+                    email: user.email || '',
+                    role: 'Contratante'
+                  });
+                }
+
+                const updates: any = {
+                  contractorIds: updatedContractorIds,
+                  contractorEmails: updatedContractorEmails,
+                  contractors: updatedContractors
+                };
+
+                // If primary contractorId is empty or unresolved, also set it
+                if (!eventData.contractorId || eventData.contractorId === 'unresolved') {
+                  updates.contractorId = user.uid;
+                  updates.contractorEmail = user.email || '';
+                  if (!eventData.contractorName || eventData.contractorName === 'Pendente') {
+                    updates.contractorName = user.displayName || 'Contratante';
+                  }
+                }
+
+                await updateDoc(doc(db, 'events', inviteEventId), updates);
+              }
               
               window.history.replaceState({}, document.title, window.location.pathname);
-              toast.success("Festa vinculada à sua conta com sucesso!");
+              toast.success("Festa vinculada à sua equipe com sucesso!");
             } catch (inviteErr: any) {
               try {
                 const checkDoc = await getDoc(doc(db, 'events', inviteEventId));
-                if (checkDoc.exists() && checkDoc.data().contractorId === user.uid) {
-                  window.history.replaceState({}, document.title, window.location.pathname);
-                  toast.success("Festa vinculada à sua conta com sucesso!");
-                  return;
+                if (checkDoc.exists()) {
+                  const cIds = checkDoc.data().contractorIds || [];
+                  if (cIds.includes(user.uid) || checkDoc.data().contractorId === user.uid) {
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                    toast.success("Festa vinculada à sua equipe com sucesso!");
+                    return;
+                  }
                 }
               } catch (e) {}
 

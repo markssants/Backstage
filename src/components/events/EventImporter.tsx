@@ -441,18 +441,29 @@ export function EventImporter({ profile, onEventImported, isMinimal = false }: E
       const { eventInfo, artsList = [], djsList = [], paymentsList = [], documentsList = [] } = importedData;
 
       // 1. Prepare main Event document
+      const contractorsList = Array.isArray(eventInfo.contractors) ? eventInfo.contractors : [];
+      const contractorEmailsList = Array.isArray(eventInfo.contractorEmails) 
+        ? eventInfo.contractorEmails 
+        : (eventInfo.contractorEmail ? [eventInfo.contractorEmail] : []);
+      const contractorIdsList = Array.isArray(eventInfo.contractorIds)
+        ? eventInfo.contractorIds
+        : (eventInfo.contractorId && eventInfo.contractorId !== 'unresolved' ? [eventInfo.contractorId] : []);
+
       const eventData = {
         name: eventInfo.name,
         logoUrl: eventInfo.logoUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${eventInfo.name}`,
         driveUrl: eventInfo.driveUrl || '',
         contractorName: eventInfo.contractorName || '',
+        contractors: contractorsList,
+        contractorEmails: contractorEmailsList,
+        contractorIds: contractorIdsList,
         city: eventInfo.city || '',
         eventDate: eventInfo.eventDate || '',
         djCount: parseInt(eventInfo.djCount) || djsList.length || 0,
         artCount: parseInt(eventInfo.artCount) || artsList.length || 0,
         motionCount: parseInt(eventInfo.motionCount) || 0,
         location: eventInfo.location || '',
-        contractorEmail: eventInfo.contractorEmail || '',
+        contractorEmail: eventInfo.contractorEmail || (contractorsList[0]?.email || ''),
         designerEmail: eventInfo.designerEmail || '',
         contractorId: profile.role === 'contractor' ? profile.id : (eventInfo.contractorId || 'unresolved'),
         designerId: profile.role === 'designer' ? profile.id : (eventInfo.designerId || 'unresolved'),

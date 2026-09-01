@@ -4,11 +4,12 @@ import { Progress } from "@/components/ui/progress";
 import { EventProject, UserProfile, ArtTask, PaymentItem, DjAsset, ProjectDocument, OperationType } from "../../types";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { db, handleFirestoreError } from "../../firebase";
-import { Palette, CheckCircle2, Clock, AlertCircle, CreditCard, Music, MapPin, User, Calendar as CalendarIcon, Download, FileText, FileSpreadsheet, FileJson, AlertTriangle } from "lucide-react";
+import { Palette, CheckCircle2, Clock, AlertCircle, CreditCard, Music, MapPin, User, Users, Calendar as CalendarIcon, Download, FileText, FileSpreadsheet, FileJson, AlertTriangle } from "lucide-react";
 import { motion } from "motion/react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { EventSelector } from '../events/EventSelector';
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Dialog,
   DialogContent,
@@ -307,6 +308,9 @@ export function Overview({ event, profile }: OverviewProps) {
         eventDate: event.eventDate || '',
         contractorName: event.contractorName || '',
         contractorEmail: event.contractorEmail || '',
+        contractors: event.contractors || [],
+        contractorEmails: event.contractorEmails || [],
+        contractorIds: event.contractorIds || [],
         contractorId: event.contractorId || '',
         designerEmail: event.designerEmail || '',
         designerId: event.designerId || '',
@@ -392,12 +396,21 @@ export function Overview({ event, profile }: OverviewProps) {
       `;
     }).join('') || `<tr><td colspan="5" class="px-6 py-12 text-center text-slate-500 italic text-sm">Nenhum DJ cadastrado</td></tr>`;
 
-    const paymentsHtmlRows = payments.map(p => `
+    const paymentsHtmlRows = payments.map(p => {
+      const receiptUrl = p.receiptUrl || p.receipts?.[0]?.url;
+      return `
       <tr class="hover:bg-white/[0.02] border-b border-white/[0.04] transition-colors">
         <td class="px-6 py-4 font-bold text-white text-sm">${p.description || 'Parcela'}</td>
         <td class="px-6 py-4 text-base font-black text-white">R$ ${(p.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
         <td class="px-6 py-4 text-xs text-slate-300 font-semibold">${p.dueDate ? formatSafeDate(p.dueDate, "dd/MM/yyyy") : 'Sem vencimento'}</td>
         <td class="px-6 py-4 text-xs text-slate-400">${p.paidAt ? formatSafeDate(p.paidAt, "dd/MM/yyyy") : 'Pendente'}</td>
+        <td class="px-6 py-4 text-xs">
+          ${receiptUrl ? `
+            <a href="${receiptUrl}" target="_blank" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 text-[11px] font-bold hover:bg-cyan-500/20">
+              🧾 Comprovante ↗
+            </a>
+          ` : '<span class="text-slate-600 text-[11px]">-</span>'}
+        </td>
         <td class="px-6 py-4 text-[10px]">
           <span class="px-2.5 py-1 rounded-full font-black uppercase tracking-wider ${
             p.status === 'paid' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20' :
@@ -406,7 +419,8 @@ export function Overview({ event, profile }: OverviewProps) {
           }">${p.status === 'paid' ? 'Pago' : p.status === 'pending' ? 'Pendente' : 'Atrasado'}</span>
         </td>
       </tr>
-    `).join('') || `<tr><td colspan="5" class="px-6 py-12 text-center text-slate-500 italic text-sm">Nenhum pagamento cadastrado</td></tr>`;
+    `;
+    }).join('') || `<tr><td colspan="6" class="px-6 py-12 text-center text-slate-500 italic text-sm">Nenhum pagamento cadastrado</td></tr>`;
 
     const docsHtmlRows = documents.map(doc => `
       <div class="p-4 rounded-2xl bg-white/5 border border-white/5 flex items-center justify-between hover:bg-white/[0.08] transition-all">
@@ -626,6 +640,7 @@ export function Overview({ event, profile }: OverviewProps) {
               <th class="px-6 py-3 font-semibold">Valor</th>
               <th class="px-6 py-3 font-semibold">Vencimento</th>
               <th class="px-6 py-3 font-semibold">Data Liquidação</th>
+              <th class="px-6 py-3 font-semibold">Comprovante</th>
               <th class="px-6 py-3 font-semibold">Estado</th>
             </tr>
           </thead>
@@ -686,8 +701,43 @@ export function Overview({ event, profile }: OverviewProps) {
             
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pb-2">
               <div className="flex items-center gap-2 text-slate-400">
-                <User className="w-3 h-3 text-pink-400" />
-                <span className="text-[10px] uppercase font-black tracking-widest">{event.contractorName || 'N/A'}</span>
+                {event.contractors && event.contractors.length > 1 ? (
+                  <Popover>
+                    <PopoverTrigger render={
+                      <button 
+                        type="button" 
+                        className="flex items-center gap-1.5 text-[10px] uppercase font-black tracking-widest text-purple-300 hover:text-pink-300 transition-colors bg-purple-500/10 px-2 py-0.5 rounded-lg border border-purple-500/20"
+                      />
+                    }>
+                      <Users className="w-3.5 h-3.5 text-purple-400" />
+                      <span>{event.contractors.length} Contratantes</span>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-64 p-3 bg-[#120b28] border-white/10 text-white rounded-2xl shadow-2xl">
+                      <div className="space-y-2">
+                        <p className="text-[10px] uppercase font-black tracking-widest text-purple-400 border-b border-white/5 pb-1">
+                          Contratantes & Produtores
+                        </p>
+                        <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
+                          {event.contractors.map((c, i) => (
+                            <div key={i} className="text-xs bg-white/5 p-2 rounded-xl space-y-0.5">
+                              <p className="font-bold text-slate-200">{c.name || 'Sem nome'}</p>
+                              {c.role && <p className="text-[10px] text-purple-300 font-semibold">{c.role}</p>}
+                              {c.email && <p className="text-[9px] text-slate-400 font-mono">{c.email}</p>}
+                              {c.phone && <p className="text-[9px] text-slate-400">{c.phone}</p>}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                ) : (
+                  <>
+                    <User className="w-3 h-3 text-pink-400" />
+                    <span className="text-[10px] uppercase font-black tracking-widest truncate max-w-[150px]">
+                      {event.contractors?.[0]?.name || event.contractorName || 'N/A'}
+                    </span>
+                  </>
+                )}
               </div>
               <div className="flex items-center gap-2 text-slate-400">
                 <CalendarIcon className="w-3 h-3 text-pink-400" />

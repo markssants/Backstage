@@ -38,6 +38,7 @@ service cloud.firestore {
              isSignedIn() && 
              exists(/databases/$(database)/documents/events/$(eventId)) && (
                ('contractorId' in get(/databases/$(database)/documents/events/$(eventId)).data && get(/databases/$(database)/documents/events/$(eventId)).data.contractorId == request.auth.uid) || 
+               ('contractorIds' in get(/databases/$(database)/documents/events/$(eventId)).data && request.auth.uid in get(/databases/$(database)/documents/events/$(eventId)).data.contractorIds) ||
                ('designerId' in get(/databases/$(database)/documents/events/$(eventId)).data && get(/databases/$(database)/documents/events/$(eventId)).data.designerId == request.auth.uid)
              )
       );
@@ -80,12 +81,14 @@ service cloud.firestore {
       allow get: if isEventMember(eventId);
       allow list: if isAdmin() || (isSignedIn() && (
         ('contractorId' in resource.data && resource.data.contractorId == request.auth.uid) || 
+        ('contractorIds' in resource.data && request.auth.uid in resource.data.contractorIds) || 
         ('designerId' in resource.data && resource.data.designerId == request.auth.uid)
       ));
       
       allow create: if (isAdmin() || (isSignedIn() && (
         (incoming().designerId == request.auth.uid) || 
-        (incoming().contractorId == request.auth.uid)
+        (incoming().contractorId == request.auth.uid) ||
+        (('contractorIds' in incoming()) && request.auth.uid in incoming().contractorIds)
       ))) &&
         isValidId(incoming().contractorId) &&
         isValidId(incoming().designerId) &&
@@ -94,12 +97,10 @@ service cloud.firestore {
       allow update: if isAdmin() || (
         isEventMember(eventId) &&
         isValidEvent(incoming()) &&
-        incoming().diff(existing()).affectedKeys().hasAny(['name', 'logoUrl', 'driveUrl', 'status', 'designerId', 'contractorId', 'contractorName', 'city', 'eventDate', 'djCount', 'artCount', 'motionCount', 'location', 'contractorEmail', 'designerEmail', 'updatedAt'])
+        incoming().diff(existing()).affectedKeys().hasAny(['name', 'logoUrl', 'driveUrl', 'status', 'designerId', 'contractorId', 'contractorName', 'city', 'eventDate', 'djCount', 'artCount', 'motionCount', 'location', 'contractorEmail', 'designerEmail', 'contractors', 'contractorIds', 'contractorEmails', 'paymentValue', 'updatedAt'])
       ) || (
         isSignedIn() &&
-        incoming().diff(existing()).affectedKeys().hasOnly(['contractorId', 'contractorEmail']) &&
-        (!('contractorId' in existing()) || existing().contractorId == 'unresolved' || existing().contractorId == '' || existing().contractorId == request.auth.uid) &&
-        incoming().contractorId == request.auth.uid
+        incoming().diff(existing()).affectedKeys().hasAny(['contractorId', 'contractorEmail', 'contractors', 'contractorIds', 'contractorEmails'])
       );
 
       allow delete: if isAdmin();
@@ -129,10 +130,13 @@ service cloud.firestore {
       allow delete: if isEventMember(eventId);
     }
 
-    // --- DJ Assets ---
+    // --- DJ Assets (Global Collection Group & Direct Access) ---
+    match /{path=**}/dj_assets/{assetId} {
+      allow read: if true;
+    }
+
     match /events/{eventId}/dj_assets/{assetId} {
-      allow get: if true;
-      allow list: if isEventMember(eventId);
+      allow read: if true;
       allow create: if isEventMember(eventId) && 
         incoming().name is string && incoming().name.size() <= 100;
       allow update: if isEventMember(eventId) || (
@@ -166,6 +170,11 @@ service cloud.firestore {
     // --- Pending Changes ---
     match /events/{eventId}/pending_changes/{changeId} {
       allow read, create, update, delete: if isEventMember(eventId);
+    }
+
+    // --- DJ Global Catalog / Library ---
+    match /djs_catalog/{djId} {
+      allow read, write: if true;
     }
 
     // --- Settings ---

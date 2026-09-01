@@ -5,6 +5,7 @@ import { db, storage } from '../../firebase';
 import { DjAsset } from '../../types';
 import { WaveformSelector } from './WaveformSelector';
 import { getDriveAccessToken, getGoogleDriveFileId } from '../../lib/googleDrive';
+import { saveDjToCatalog } from '../../lib/djCatalog';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
@@ -412,6 +413,35 @@ export function DjPublicForm({ eventId, assetId }: DjPublicFormProps) {
       };
 
       await updateDoc(docRef, updateData);
+
+      if (asset?.name) {
+        try {
+          saveDjToCatalog({
+            name: asset.name,
+            presskitUrl: updateData.presskitUrl || '',
+            presskitType: 'link',
+            presskitStatus: 'completed',
+            hasMandatoryLogo: updateData.hasMandatoryLogo,
+            agencies: updateData.agencies,
+            agencyInfo: updateData.agencyInfo,
+            hasRecordLabel: !!(updateData.labels && updateData.labels.length > 0),
+            labels: updateData.labels,
+            labelInfo: updateData.labelInfo,
+            hasVisualMaterial: !!(updateData.flyerPhoto || updateData.animationVideo),
+            visualMaterialType: vProps,
+            flyerPhoto: updateData.flyerPhoto || '',
+            animationVideo: updateData.animationVideo || '',
+            hasPlaylist: !!(updateData.musicName || updateData.musicUrl),
+            musicName: updateData.musicName || '',
+            musicUrl: updateData.musicUrl || '',
+            musicUrlType: updateData.musicUrlType || 'link',
+            musicDuration: updateData.musicDuration || '',
+          });
+        } catch (catErr) {
+          console.warn("Erro ao salvar catálogo no formulário público:", catErr);
+        }
+      }
+
       setSuccess(true);
       toast.success('Informações atualizadas com sucesso!');
     } catch (err) {

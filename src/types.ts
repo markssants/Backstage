@@ -8,6 +8,15 @@ export interface UserProfile {
   createdAt: any;
 }
 
+export interface EventContractor {
+  id?: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  role?: string;
+  addedAt?: any;
+}
+
 export interface EventProject {
   id: string;
   name: string;
@@ -25,6 +34,9 @@ export interface EventProject {
   designerId: string;
   contractorEmail?: string;
   designerEmail?: string;
+  contractors?: EventContractor[];
+  contractorIds?: string[];
+  contractorEmails?: string[];
   status: 'planning' | 'ongoing' | 'completed';
   createdAt: any;
   updatedAt?: any;
@@ -108,6 +120,34 @@ export interface DjAsset {
   updatedAt?: any;
 }
 
+export interface DjCatalogItem {
+  id?: string;
+  name: string;
+  normalizedName?: string;
+  presskitUrl?: string;
+  presskitType?: 'link' | 'file' | 'email';
+  presskitStatus?: 'pending' | 'completed';
+  hasMandatoryLogo?: boolean;
+  agencies?: DjAgency[];
+  agencyInfo?: string;
+  hasRecordLabel?: boolean;
+  labels?: DjLabel[];
+  labelInfo?: string;
+  hasVisualMaterial?: boolean;
+  visualMaterialType?: 'both' | 'photo' | 'video';
+  flyerPhoto?: string;
+  flyerPhotoType?: 'link' | 'file';
+  animationVideo?: string;
+  animationVideoType?: 'link' | 'file';
+  hasPlaylist?: boolean;
+  musicName?: string;
+  musicUrl?: string;
+  musicUrlType?: 'link' | 'file';
+  musicDuration?: string;
+  lastUsedAt?: any;
+  updatedAt?: any;
+}
+
 export interface ProjectDocument {
   id: string;
   eventId: string;
@@ -120,6 +160,15 @@ export interface ProjectDocument {
   updatedAt?: any;
 }
 
+export interface PaymentReceipt {
+  id: string;
+  url: string;
+  name: string;
+  type?: 'image' | 'pdf' | 'file';
+  size?: number;
+  uploadedAt?: any;
+}
+
 export interface PaymentItem {
   id: string;
   eventId: string;
@@ -128,6 +177,11 @@ export interface PaymentItem {
   status: 'paid' | 'pending' | 'overdue';
   dueDate: any;
   paidAt?: any;
+  receiptUrl?: string;
+  receiptName?: string;
+  receiptType?: 'image' | 'pdf' | 'file';
+  receipts?: PaymentReceipt[];
+  notes?: string;
   createdAt: any;
   updatedAt?: any;
 }

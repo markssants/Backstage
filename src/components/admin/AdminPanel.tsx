@@ -786,7 +786,25 @@ export function AdminPanel({ profile }: AdminPanelProps) {
                             </div>
                           </td>
                           <td className="py-4 px-6">
-                            {e.contractorId === 'unresolved' ? (
+                            {Array.isArray(e.contractors) && e.contractors.length > 1 ? (
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-1.5">
+                                  <Badge className="bg-purple-500/10 text-purple-300 border border-purple-500/20 text-[9px] uppercase font-black py-0.5">
+                                    {e.contractors.length} Contratantes
+                                  </Badge>
+                                </div>
+                                <div className="space-y-0.5">
+                                  {e.contractors.slice(0, 2).map((c, ci) => (
+                                    <p key={ci} className="text-xs font-bold text-slate-200 truncate max-w-[170px]">
+                                      {c.name || c.email} {c.role && <span className="text-[9px] text-purple-400 font-medium">({c.role})</span>}
+                                    </p>
+                                  ))}
+                                  {e.contractors.length > 2 && (
+                                    <p className="text-[9px] text-slate-500 font-semibold">+{e.contractors.length - 2} outros</p>
+                                  )}
+                                </div>
+                              </div>
+                            ) : e.contractorId === 'unresolved' && (!e.contractors || e.contractors.length === 0) ? (
                               <div className="space-y-0.5">
                                 <Badge variant="outline" className="bg-amber-500/10 border-amber-500/20 text-amber-500 py-0 px-2 text-[9px] font-black uppercase">
                                   Pendente
@@ -795,8 +813,8 @@ export function AdminPanel({ profile }: AdminPanelProps) {
                               </div>
                             ) : (
                               <div className="space-y-0.5">
-                                <p className="text-sm font-bold text-slate-200">{cUser?.name || e.contractorName || 'Carregando...'}</p>
-                                <p className="text-[10px] text-slate-500 font-mono truncate max-w-[150px]">{e.contractorEmail || cUser?.email}</p>
+                                <p className="text-sm font-bold text-slate-200">{cUser?.name || e.contractors?.[0]?.name || e.contractorName || 'Carregando...'}</p>
+                                <p className="text-[10px] text-slate-500 font-mono truncate max-w-[150px]">{e.contractors?.[0]?.email || e.contractorEmail || cUser?.email}</p>
                               </div>
                             )}
                           </td>
