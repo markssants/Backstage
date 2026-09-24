@@ -556,6 +556,13 @@ export function DjAssets({ event, profile, initialSelectedAssetId, onClearInitia
   };
 
   const handleSave = async () => {
+    // 0. Verifica se ainda há uploads em andamento
+    const isAnyUploading = Object.values(uploadingState).some(Boolean);
+    if (isAnyUploading) {
+      toast.warning("Aguarde o envio dos arquivos antes de salvar.");
+      return;
+    }
+
     // 1. Identificação DJ 1
     if (!dj1Name.trim()) {
       toast.error("O campo 'Nome do DJ 1' é obrigatório.");
@@ -568,13 +575,7 @@ export function DjAssets({ event, profile, initialSelectedAssetId, onClearInitia
       return;
     }
 
-    // 3. Prazo de Entrega
-    if (!artDeadline.trim()) {
-      toast.error("O campo 'Prazo de Entrega da Arte' é obrigatório.");
-      return;
-    }
-
-    // 4. DJ 1 Mandatory Logo validation
+    // 3. DJ 1 Mandatory Logo validation
     if (dj1HasMandatoryLogo) {
       if (!dj1Agencies || dj1Agencies.length === 0 || !dj1Agencies.some(a => a.name.trim())) {
         toast.error("Adicione pelo menos uma agência para o DJ 1.");
@@ -632,7 +633,7 @@ export function DjAssets({ event, profile, initialSelectedAssetId, onClearInitia
         dj2MusicDuration: isVersus && dj2HasPlaylist ? dj2MusicDuration : '',
 
         // Common Fields
-        artDeadline,
+        artDeadline: artDeadline.trim(),
         priority,
         presskitStatus: (dj1PresskitUrl || (isVersus && dj2PresskitUrl)) ? 'completed' : presskitStatus
       };
@@ -652,37 +653,33 @@ export function DjAssets({ event, profile, initialSelectedAssetId, onClearInitia
           createdAt: serverTimestamp(),
         }));
 
-        // Automatically create Art Task if deadline is set
+        // Criação automática da tarefa de arte em background (sem busca desnecessária de 500 docs)
         if (payload.artDeadline) {
           const artsPath = `events/${event.id}/arts`;
-          const artsSnap = await getDocs(query(collection(db, artsPath), limit(500)));
-          const todoArts = artsSnap.docs.map(d => d.data() as ArtTask).filter(a => a.status === 'todo');
-          const maxPosition = todoArts.length > 0 ? Math.max(...todoArts.map(a => a.position || 0)) : 0;
-
           const titleDisplay = isVersus ? `Arte DJ: ${payload.name} VS ${payload.dj2Name}` : `Arte DJ: ${payload.name}`;
           const descDisplay = isVersus 
             ? `Versus / B2B cadastrado via Presskits.\n\n--- DJ 1: ${payload.name} ---\nPresskit: ${payload.presskitUrl || '-'}\nFoto: ${payload.flyerPhoto || '-'}\nMúsica: ${payload.musicName || '-'}\n\n--- DJ 2: ${payload.dj2Name} ---\nPresskit: ${payload.dj2PresskitUrl || '-'}\nFoto: ${payload.dj2FlyerPhoto || '-'}\nMúsica: ${payload.dj2MusicName || '-'}`
             : `DJ cadastrado via Presskits.\n\nPresskit: ${payload.presskitUrl || 'Não informado'}\nAtração: ${payload.name}\nMúsica: ${payload.musicName || 'Não informada'}\nFoto p/ Flyer: ${payload.flyerPhoto || 'Não informada'}\nVídeo p/ Animação: ${payload.animationVideo || 'Não informado'}${payload.hasMandatoryLogo ? `\n\n⚠️ LOGO OBRIGATÓRIA:\nAgencia: ${payload.agencyInfo || '-'}\nGravadora: ${payload.labelInfo || '-'}` : ''}`;
 
-          await addDoc(collection(db, artsPath), sanitizeForFirestore({
+          addDoc(collection(db, artsPath), sanitizeForFirestore({
             title: titleDisplay,
             description: descDisplay,
             priority: payload.priority || 'medium',
             category: 'dj',
             deadline: payload.artDeadline,
             status: 'todo',
-            position: maxPosition + 1000,
+            position: Date.now(),
             eventId: event.id,
             createdAt: serverTimestamp(),
             sourceAssetId: assetRef.id
-          }));
-          
-          toast.info("Tarefa de arte criada automaticamente no quadro!");
+          })).catch(err => {
+            console.warn("Aviso ao criar tarefa de arte automática:", err);
+          });
         }
         toast.success(isVersus ? "Atração Versus adicionada com sucesso!" : "DJ adicionado com sucesso!");
       }
 
-      // Sincroniza os DJs cadastrados com o Catálogo Global
+      // Sincroniza os DJs cadastrados com o Catálogo Global em background (não bloqueante)
       try {
         if (payload.name && payload.name.trim()) {
           saveDjToCatalog({
@@ -1159,8 +1156,8 @@ export function DjAssets({ event, profile, initialSelectedAssetId, onClearInitia
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400 flex items-center gap-1">
-                      Data de Entrega da Arte <span className="text-pink-500 font-bold">*</span>
+                    <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400 flex items-center gap-1.5">
+                      Data de Entrega da Arte <span className="text-slate-500 text-[9px] font-normal lowercase">(opcional)</span>
                     </Label>
                     <Input 
                       type="date" 

@@ -1,4 +1,4 @@
-import { collection, collectionGroup, doc, setDoc, getDocs, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { collection, query, limit, doc, setDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { DjCatalogItem, DjAsset } from '../types';
 import { sanitizeForFirestore } from './error-handler';
@@ -45,6 +45,7 @@ export function setLocalDjCatalog(items: DjCatalogItem[]) {
 
 /**
  * Salva ou atualiza os dados completos de um DJ no Catálogo Global e no LocalStorage.
+ * Executa atualização local instantânea e sincroniza com o Firestore em background sem bloquear.
  */
 export async function saveDjToCatalog(djData: Partial<DjCatalogItem>) {
   if (!djData.name || !djData.name.trim()) return;
@@ -81,7 +82,7 @@ export async function saveDjToCatalog(djData: Partial<DjCatalogItem>) {
     musicDuration: djData.musicDuration || '',
   };
 
-  // Atualiza cache local imediatamente
+  // 1. Atualiza cache local imediatamente (0ms de latência)
   const localList = getLocalDjCatalog();
   const existingIdx = localList.findIndex(x => (x.normalizedName || normalizeDjName(x.name)) === normName);
   if (existingIdx >= 0) {
@@ -91,28 +92,70 @@ export async function saveDjToCatalog(djData: Partial<DjCatalogItem>) {
   }
   setLocalDjCatalog(localList);
 
-  // Sincroniza com o Firestore na coleção global de DJs
-  try {
-    const docRef = doc(db, 'djs_catalog', docId);
-    await setDoc(docRef, sanitizeForFirestore({
-      ...cleanPayload,
-      updatedAt: serverTimestamp(),
-      lastUsedAt: serverTimestamp(),
-    }), { merge: true });
-  } catch (err) {
-    console.warn("Não foi possível sincronizar DJ com o Firestore (usando cache local):", err);
-  }
+  // 2. Sincroniza com o Firestore na coleção global de DJs em background (sem bloquear UI)
+  const docRef = doc(db, 'djs_catalog', docId);
+  setDoc(docRef, sanitizeForFirestore({
+    ...cleanPayload,
+    updatedAt: serverTimestamp(),
+    lastUsedAt: serverTimestamp(),
+  }), { merge: true }).catch((err) => {
+    console.warn("Aviso ao persistir DJ no Firestore djs_catalog:", err);
+  });
 }
 
 /**
- * Registra múltiplos DJ Assets no catálogo
+ * Registra múltiplos DJ Assets no catálogo local (em memória e cache).
+ * NÃO realiza escritas no Firestore para evitar tempestade de requisições.
  */
 export function registerDjsFromAssets(assets: DjAsset[]) {
   if (!assets || assets.length === 0) return;
+  const localList = getLocalDjCatalog();
+  let hasChanges = false;
+
+  const addOrUpdateLocal = (rawName: string, partial: Partial<DjCatalogItem>) => {
+    if (!rawName || !rawName.trim()) return;
+    const name = rawName.trim();
+    const norm = normalizeDjName(name);
+    const existingIdx = localList.findIndex(x => (x.normalizedName || normalizeDjName(x.name)) === norm);
+    const item: DjCatalogItem = {
+      id: getDjCatalogDocId(name),
+      name,
+      normalizedName: norm,
+      updatedAt: new Date().toISOString(),
+      lastUsedAt: new Date().toISOString(),
+      presskitUrl: partial.presskitUrl || '',
+      presskitType: partial.presskitType || 'link',
+      presskitStatus: partial.presskitStatus || 'pending',
+      hasMandatoryLogo: !!partial.hasMandatoryLogo,
+      agencies: partial.agencies || [],
+      agencyInfo: partial.agencyInfo || '',
+      hasRecordLabel: !!partial.hasRecordLabel,
+      labels: partial.labels || [],
+      labelInfo: partial.labelInfo || '',
+      hasVisualMaterial: !!partial.hasVisualMaterial,
+      visualMaterialType: partial.visualMaterialType || 'both',
+      flyerPhoto: partial.flyerPhoto || '',
+      flyerPhotoType: partial.flyerPhotoType || 'link',
+      animationVideo: partial.animationVideo || '',
+      animationVideoType: partial.animationVideoType || 'link',
+      hasPlaylist: !!partial.hasPlaylist,
+      musicName: partial.musicName || '',
+      musicUrl: partial.musicUrl || '',
+      musicUrlType: partial.musicUrlType || 'link',
+      musicDuration: partial.musicDuration || '',
+    };
+
+    if (existingIdx >= 0) {
+      localList[existingIdx] = { ...localList[existingIdx], ...item };
+    } else {
+      localList.push(item);
+    }
+    hasChanges = true;
+  };
+
   for (const a of assets) {
     if (a.name && a.name.trim()) {
-      saveDjToCatalog({
-        name: a.name,
+      addOrUpdateLocal(a.name, {
         presskitUrl: a.presskitUrl || '',
         presskitType: a.presskitType || 'link',
         presskitStatus: a.presskitStatus || 'pending',
@@ -134,8 +177,7 @@ export function registerDjsFromAssets(assets: DjAsset[]) {
       });
     }
     if (a.isVersus && a.dj2Name && a.dj2Name.trim()) {
-      saveDjToCatalog({
-        name: a.dj2Name,
+      addOrUpdateLocal(a.dj2Name, {
         presskitUrl: a.dj2PresskitUrl || '',
         presskitType: a.dj2PresskitType || 'link',
         presskitStatus: a.dj2PresskitUrl ? 'completed' : 'pending',
@@ -157,16 +199,20 @@ export function registerDjsFromAssets(assets: DjAsset[]) {
       });
     }
   }
+
+  if (hasChanges) {
+    setLocalDjCatalog(localList);
+  }
 }
 
 /**
- * Escuta o catálogo de DJs em tempo real no banco de dados e sincroniza com TODOS os eventos do site.
+ * Escuta o catálogo de DJs em tempo real no Firestore e mantém sincronizado no cache local.
  */
 export function subscribeToDjCatalog(onUpdate: (catalog: DjCatalogItem[]) => void) {
   // Mapa centralizado de itens em memória
   const memoryCatalog = new Map<string, DjCatalogItem>();
 
-  // 1. Carrega imediatamente o cache do LocalStorage
+  // 1. Carrega imediatamente o cache do LocalStorage (latência 0)
   const initialLocal = getLocalDjCatalog();
   for (const item of initialLocal) {
     const norm = item.normalizedName || normalizeDjName(item.name || '');
@@ -176,10 +222,14 @@ export function subscribeToDjCatalog(onUpdate: (catalog: DjCatalogItem[]) => voi
     onUpdate(Array.from(memoryCatalog.values()));
   }
 
+  let broadcastTimeout: ReturnType<typeof setTimeout> | null = null;
   const broadcastUpdates = () => {
-    const items = Array.from(memoryCatalog.values());
-    setLocalDjCatalog(items);
-    onUpdate(items);
+    if (broadcastTimeout) clearTimeout(broadcastTimeout);
+    broadcastTimeout = setTimeout(() => {
+      const items = Array.from(memoryCatalog.values());
+      setLocalDjCatalog(items);
+      onUpdate(items);
+    }, 50);
   };
 
   const processDjDoc = (d: any) => {
@@ -253,9 +303,9 @@ export function subscribeToDjCatalog(onUpdate: (catalog: DjCatalogItem[]) => voi
     }
   };
 
-  // 2. Listener 1: Coleção Global /djs_catalog
-  const catalogRef = collection(db, 'djs_catalog');
-  const unsubscribeCatalog = onSnapshot(catalogRef, (snapshot) => {
+  // 2. Listener centralizado da Coleção Global /djs_catalog (limitado a 300 itens recentes)
+  const catalogQuery = query(collection(db, 'djs_catalog'), limit(300));
+  const unsubscribeCatalog = onSnapshot(catalogQuery, (snapshot) => {
     snapshot.forEach(docSnap => {
       processDjDoc({ id: docSnap.id, ...docSnap.data() });
     });
@@ -264,55 +314,10 @@ export function subscribeToDjCatalog(onUpdate: (catalog: DjCatalogItem[]) => voi
     console.warn("Aviso ao escutar djs_catalog:", err);
   });
 
-  // 3. Listener 2: collectionGroup('dj_assets') - escuta TODOS os DJs de TODAS as festas em tempo real
-  let unsubscribeGroup: (() => void) | null = null;
-  try {
-    const groupRef = collectionGroup(db, 'dj_assets');
-    unsubscribeGroup = onSnapshot(groupRef, (snapshot) => {
-      snapshot.forEach(docSnap => {
-        processDjDoc({ id: docSnap.id, ...docSnap.data() });
-      });
-      broadcastUpdates();
-    }, (err) => {
-      console.warn("Aviso collectionGroup(dj_assets), aplicando varredura por eventos:", err);
-      scanAllEventsDirectly(processDjDoc, broadcastUpdates);
-    });
-  } catch (err) {
-    console.warn("Falha ao inicializar collectionGroup:", err);
-    scanAllEventsDirectly(processDjDoc, broadcastUpdates);
-  }
-
-  // 4. Varredura direta de todos os eventos existentes para garantir sincronização total de todo o histórico
-  scanAllEventsDirectly(processDjDoc, broadcastUpdates);
-
   return () => {
+    if (broadcastTimeout) clearTimeout(broadcastTimeout);
     unsubscribeCatalog();
-    if (unsubscribeGroup) unsubscribeGroup();
   };
-}
-
-/**
- * Faz a varredura direta em todas as festas cadastradas em /events/{id}/dj_assets
- */
-async function scanAllEventsDirectly(processDoc: (d: any) => void, onComplete: () => void) {
-  try {
-    const eventsSnap = await getDocs(collection(db, 'events'));
-    const promises = eventsSnap.docs.map(async (evDoc) => {
-      try {
-        const assetsSnap = await getDocs(collection(db, 'events', evDoc.id, 'dj_assets'));
-        assetsSnap.forEach(assetDoc => {
-          processDoc({ id: assetDoc.id, ...assetDoc.data() });
-        });
-      } catch (e) {
-        // Ignora erros de permissão de eventos individuais se houver
-      }
-    });
-
-    await Promise.all(promises);
-    onComplete();
-  } catch (e) {
-    console.warn("Erro ao fazer varredura de eventos:", e);
-  }
 }
 
 /**
