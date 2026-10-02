@@ -115,7 +115,7 @@ export function Dashboard({ profile }: DashboardProps) {
         />
         
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 pb-24 md:pb-8">
-          {activeView === 'profile' && <ProfileManagement profile={profile} />}
+          {activeView === 'profile' && <ProfileManagement profile={profile} events={events} />}
           {activeView === 'about' && <About />}
           {activeView === 'admin' && profile.email === 'beysarts@gmail.com' && <AdminPanel profile={profile} />}
 
